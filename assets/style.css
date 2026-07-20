@@ -2,20 +2,20 @@
    ธีมกลางของเว็บไซต์ "ข้อสอบ" — แก้สีธีมได้ที่ :root ก้อนเดียว
    ═══════════════════════════════════════════════════════════════ */
 :root{
-  --bg0:#140b22;
-  --bg1:#1c0f30;
-  --bg2:#26123f;
-  --ink:#ffffff;
-  --muted:#c9bce3;
-  --muted2:#9a8bc0;
-  --line:rgba(255,255,255,.12);
-  --card:rgba(255,255,255,.05);
-  --card-hi:rgba(255,255,255,.09);
+  --bg0:#ffffff;
+  --bg1:#ffffff;
+  --bg2:#ffffff;
+  --ink:#111111;
+  --muted:#4a4a4a;
+  --muted2:#6b6b6b;
+  --line:rgba(0,0,0,.12);
+  --card:rgba(0,0,0,.03);
+  --card-hi:rgba(0,0,0,.06);
   --accent:#d761ff;
   --accent2:#7c5cff;
   --accent-ink:#2a0a3a;
-  --ok:#4ade80;
-  --danger:#ff6b6b;
+  --ok:#1a9a55;
+  --danger:#d92d2d;
   --r:10px;
   --r-lg:18px;
   --tap:54px;
@@ -27,9 +27,9 @@ body{
   font-family:"Sarabun",-apple-system,"Noto Sans Thai",sans-serif;
   font-size:16px;line-height:1.65;color:var(--ink);
   background:
-    radial-gradient(1100px 600px at 12% -8%, rgba(215,97,255,.22), transparent 60%),
-    radial-gradient(900px 560px at 100% 0%, rgba(124,92,255,.20), transparent 55%),
-    linear-gradient(180deg,var(--bg0),var(--bg1) 45%,var(--bg2));
+    radial-gradient(1100px 600px at 12% -8%, rgba(215,97,255,.08), transparent 60%),
+    radial-gradient(900px 560px at 100% 0%, rgba(124,92,255,.07), transparent 55%),
+    var(--bg0);
   min-height:100vh;
 }
 h1,h2,h3,h4{line-height:1.3;font-weight:700}
@@ -59,7 +59,7 @@ img{max-width:100%;display:block}
 
 /* ── หัวเว็บ / นำทาง ──────────────────────────────────────── */
 header.site{position:sticky;top:0;z-index:50;
-  background:rgba(20,11,34,.72);backdrop-filter:blur(10px);
+  background:rgba(255,255,255,.82);backdrop-filter:blur(10px);
   border-bottom:1px solid var(--line)}
 .nav{display:flex;align-items:center;gap:18px;padding:14px 20px;max-width:var(--wrap);margin:0 auto}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;margin-right:auto}
@@ -68,8 +68,8 @@ header.site{position:sticky;top:0;z-index:50;
   box-shadow:0 0 14px var(--accent)}
 .navlinks{display:flex;gap:4px;align-items:center}
 .navlinks a{padding:10px 14px;border-radius:999px;font-weight:600;font-size:15px;color:var(--muted);white-space:nowrap}
-.navlinks a:hover,.navlinks a.on{color:#fff;background:var(--card)}
-.navburger{display:none;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:6px}
+.navlinks a:hover,.navlinks a.on{color:var(--ink);background:var(--card)}
+.navburger{display:none;background:none;border:none;color:var(--ink);font-size:26px;cursor:pointer;padding:6px}
 @media (max-width:860px){
   .navlinks{position:fixed;inset:64px 0 0 0;flex-direction:column;align-items:stretch;
     background:var(--bg1);padding:14px;gap:6px;display:none;overflow-y:auto}
@@ -83,7 +83,7 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 .foot-grid{max-width:var(--wrap);margin:0 auto;display:flex;flex-wrap:wrap;gap:26px;justify-content:space-between}
 .foot-grid h4{font-size:15px;margin-bottom:10px;color:var(--muted)}
 .foot-grid a{display:block;padding:4px 0;color:var(--muted);font-size:14.5px}
-.foot-grid a:hover{color:#fff}
+.foot-grid a:hover{color:var(--ink)}
 .foot-bottom{max-width:var(--wrap);margin:26px auto 0;padding-top:18px;border-top:1px solid var(--line);
   font-size:13.5px;color:var(--muted2);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 
@@ -122,7 +122,7 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 .field .req{color:var(--danger)}
 .field input,.field textarea,.field select{
   width:100%;min-height:var(--tap);padding:12px 15px;font:inherit;font-size:16px;
-  border:1.5px solid var(--line);border-radius:var(--r);background:rgba(255,255,255,.04);color:var(--ink)
+  border:1.5px solid var(--line);border-radius:var(--r);background:#ffffff;color:var(--ink)
 }
 .field textarea{min-height:120px;resize:vertical}
 .field input::placeholder,.field textarea::placeholder{color:var(--muted2)}
