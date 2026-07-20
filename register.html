@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>สมัครสมาชิก — ข้อสอบ</title>
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/register.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="section" style="padding-top:56px">
+    <div class="wrap narrow">
+      <div class="auth-card">
+        <h1>สมัครสมาชิก</h1>
+        <p class="sub">สมัครฟรี ใช้เวลาไม่ถึงนาที</p>
+        <div id="msg"></div>
+        <form id="regForm">
+          <div class="field">
+            <label for="n">ชื่อที่ใช้แสดง</label>
+            <input type="text" id="n" required>
+          </div>
+          <div class="field">
+            <label for="u">ชื่อผู้ใช้</label>
+            <input type="text" id="u" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label for="p">รหัสผ่าน (อย่างน้อย 6 ตัว)</label>
+            <input type="password" id="p" autocomplete="new-password" minlength="6" required>
+          </div>
+          <button class="btn p block" type="submit">สมัครสมาชิก</button>
+        </form>
+        <p class="switch">มีบัญชีอยู่แล้ว? <a href="login.html">เข้าสู่ระบบ</a></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script>
+  renderHeader("register.html");
+  renderFooter();
+
+  document.getElementById("regForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("n").value.trim();
+    const username = document.getElementById("u").value.trim();
+    const password = document.getElementById("p").value;
+    const btn = e.target.querySelector("button");
+    btn.disabled = true; btn.textContent = "กำลังสมัคร…";
+
+    const res = await apiCall("register", { name, username, password });
+
+    if (res.ok){
+      setSession({ username, name });
+      location.href = "index.html";
+    } else {
+      document.getElementById("msg").innerHTML = `<div class="msg bad">${escHtml(res.error || "สมัครไม่สำเร็จ")}</div>`;
+      btn.disabled = false; btn.textContent = "สมัครสมาชิก";
+    }
+  };
+</script>
+</body>
+</html>

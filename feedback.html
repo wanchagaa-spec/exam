@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>พื้นที่แสดงความเห็น — ข้อสอบ</title>
+<meta name="description" content="พื้นที่ให้นักเรียนแสดงความคิดเห็น ข้อเสนอแนะ หรือแจ้งปัญหาการใช้งาน">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/feedback.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:20px">
+    <div class="wrap">
+      <span class="eyebrow">พื้นที่แสดงความเห็น</span>
+      <h1>ความคิดเห็นและข้อเสนอแนะ</h1>
+      <p class="lead">พบปัญหาการใช้งาน อยากให้เพิ่มวิชา หรืออยากบอกอะไรกับทีมงาน เขียนไว้ที่นี่ได้เลย</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap" style="max-width:720px;margin:0 auto">
+      <div id="msg"></div>
+      <div class="card" style="margin-bottom:26px">
+        <form id="fbForm">
+          <div class="field">
+            <label for="fName">ชื่อที่จะแสดง</label>
+            <input type="text" id="fName" placeholder="เช่น น้องแนน ม.3" required>
+          </div>
+          <div class="field">
+            <label for="fText">ความคิดเห็น <span class="req">*</span></label>
+            <textarea id="fText" placeholder="เขียนความคิดเห็นของคุณ" required maxlength="500"></textarea>
+          </div>
+          <button class="btn p block" type="submit">ส่งความคิดเห็น</button>
+        </form>
+      </div>
+
+      <h2 style="font-size:20px;margin-bottom:14px">ความคิดเห็นล่าสุด</h2>
+      <div id="list"></div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script>
+  renderHeader("feedback.html");
+  renderFooter();
+
+  const FB_KEY = "examSiteFeedbackDemo";
+  function loadLocal(){ try { return JSON.parse(localStorage.getItem(FB_KEY) || "[]"); } catch(e){ return []; } }
+  function saveLocal(list){ localStorage.setItem(FB_KEY, JSON.stringify(list)); }
+
+  function renderList(){
+    const list = loadLocal();
+    const box = document.getElementById("list");
+    if (!list.length){
+      box.innerHTML = '<p class="muted">ยังไม่มีความคิดเห็น เป็นคนแรกที่เขียนได้เลย</p>';
+      return;
+    }
+    box.innerHTML = list.slice().reverse().map(c => `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <b>${escHtml(c.name)}</b>
+          <span class="muted" style="font-size:13px">${new Date(c.time).toLocaleDateString("th-TH")}</span>
+        </div>
+        <p>${escHtml(c.text)}</p>
+      </div>
+    `).join("");
+  }
+  renderList();
+
+  document.getElementById("fbForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("fName").value.trim();
+    const text = document.getElementById("fText").value.trim();
+    if (!name || !text) return;
+
+    const btn = e.target.querySelector("button");
+    btn.disabled = true; btn.textContent = "กำลังส่ง…";
+
+    await apiCall("feedback", { name, text });
+
+    if (APP.demoMode){
+      const list = loadLocal();
+      list.push({ name, text, time: Date.now() });
+      saveLocal(list);
+      renderList();
+    }
+
+    document.getElementById("msg").innerHTML =
+      '<div class="msg ok">ส่งความคิดเห็นเรียบร้อยแล้ว ขอบคุณค่ะ' +
+      (APP.demoMode ? " (โหมดตัวอย่าง — เห็นเฉพาะเบราว์เซอร์นี้)" : "") + "</div>";
+    e.target.reset();
+    btn.disabled = false; btn.textContent = "ส่งความคิดเห็น";
+  };
+</script>
+</body>
+</html>

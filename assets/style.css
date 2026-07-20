@@ -1,0 +1,143 @@
+/* ═══════════════════════════════════════════════════════════════
+   ธีมกลางของเว็บไซต์ "ข้อสอบ" — แก้สีธีมได้ที่ :root ก้อนเดียว
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --bg0:#140b22;
+  --bg1:#1c0f30;
+  --bg2:#26123f;
+  --ink:#ffffff;
+  --muted:#c9bce3;
+  --muted2:#9a8bc0;
+  --line:rgba(255,255,255,.12);
+  --card:rgba(255,255,255,.05);
+  --card-hi:rgba(255,255,255,.09);
+  --accent:#d761ff;
+  --accent2:#7c5cff;
+  --accent-ink:#2a0a3a;
+  --ok:#4ade80;
+  --danger:#ff6b6b;
+  --r:10px;
+  --r-lg:18px;
+  --tap:54px;
+  --wrap:1080px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Sarabun",-apple-system,"Noto Sans Thai",sans-serif;
+  font-size:16px;line-height:1.65;color:var(--ink);
+  background:
+    radial-gradient(1100px 600px at 12% -8%, rgba(215,97,255,.22), transparent 60%),
+    radial-gradient(900px 560px at 100% 0%, rgba(124,92,255,.20), transparent 55%),
+    linear-gradient(180deg,var(--bg0),var(--bg1) 45%,var(--bg2));
+  min-height:100vh;
+}
+h1,h2,h3,h4{line-height:1.3;font-weight:700}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 20px}
+.muted{color:var(--muted)}
+.hidden{display:none !important}
+::selection{background:var(--accent);color:#fff}
+
+/* ── ปุ่ม ─────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:var(--tap);padding:0 24px;border-radius:var(--r);border:none;
+  font-family:inherit;font-size:16px;font-weight:700;cursor:pointer;
+  transition:.15s transform,.15s box-shadow,.15s opacity;
+}
+.btn:active{transform:scale(.98)}
+.btn.p{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
+  box-shadow:0 8px 24px rgba(215,97,255,.35)}
+.btn.p:hover{box-shadow:0 10px 28px rgba(215,97,255,.5)}
+.btn.s{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+.btn.s:hover{background:var(--card-hi)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.btn.block{width:100%}
+
+/* ── หัวเว็บ / นำทาง ──────────────────────────────────────── */
+header.site{position:sticky;top:0;z-index:50;
+  background:rgba(20,11,34,.72);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;gap:18px;padding:14px 20px;max-width:var(--wrap);margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;margin-right:auto}
+.brand .dot{width:11px;height:11px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 0 14px var(--accent)}
+.navlinks{display:flex;gap:4px;align-items:center}
+.navlinks a{padding:10px 14px;border-radius:999px;font-weight:600;font-size:15px;color:var(--muted);white-space:nowrap}
+.navlinks a:hover,.navlinks a.on{color:#fff;background:var(--card)}
+.navburger{display:none;background:none;border:none;color:#fff;font-size:26px;cursor:pointer;padding:6px}
+@media (max-width:860px){
+  .navlinks{position:fixed;inset:64px 0 0 0;flex-direction:column;align-items:stretch;
+    background:var(--bg1);padding:14px;gap:6px;display:none;overflow-y:auto}
+  .navlinks.open{display:flex}
+  .navlinks a{padding:16px;font-size:17px;border-bottom:1px solid var(--line);border-radius:8px}
+  .navburger{display:block}
+}
+
+/* ── ฟุตเตอร์ ─────────────────────────────────────────────── */
+footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 46px}
+.foot-grid{max-width:var(--wrap);margin:0 auto;display:flex;flex-wrap:wrap;gap:26px;justify-content:space-between}
+.foot-grid h4{font-size:15px;margin-bottom:10px;color:var(--muted)}
+.foot-grid a{display:block;padding:4px 0;color:var(--muted);font-size:14.5px}
+.foot-grid a:hover{color:#fff}
+.foot-bottom{max-width:var(--wrap);margin:26px auto 0;padding-top:18px;border-top:1px solid var(--line);
+  font-size:13.5px;color:var(--muted2);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+/* ── ป้ายโหมดตัวอย่าง ─────────────────────────────────────── */
+.demo-banner{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;
+  text-align:center;font-weight:700;font-size:14px;padding:10px 14px;line-height:1.5}
+
+/* ── ส่วนหัวหน้า / hero ───────────────────────────────────── */
+.hero{padding:64px 0 46px}
+.eyebrow{display:inline-block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
+  font-weight:700;color:var(--accent);background:rgba(215,97,255,.14);
+  border:1px solid rgba(215,97,255,.35);padding:6px 14px;border-radius:999px;margin-bottom:16px}
+.hero h1{font-size:clamp(30px,5vw,48px);margin-bottom:14px}
+.hero p.lead{font-size:18px;color:var(--muted);max-width:640px;margin-bottom:26px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap}
+.section{padding:46px 0}
+.section h2{font-size:clamp(22px,3vw,30px);margin-bottom:8px}
+.section p.sub{color:var(--muted);margin-bottom:26px;max-width:640px}
+
+/* ── การ์ด ────────────────────────────────────────────────── */
+.grid{display:grid;gap:16px}
+.grid.c2{grid-template-columns:repeat(2,1fr)}
+.grid.c3{grid-template-columns:repeat(3,1fr)}
+@media (max-width:760px){.grid.c2,.grid.c3{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px}
+.card:hover{background:var(--card-hi)}
+.card h3{font-size:19px;margin-bottom:8px}
+.card p{color:var(--muted);font-size:15px}
+.card .tag{display:inline-block;font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:999px;
+  background:rgba(215,97,255,.16);color:var(--accent);margin-bottom:12px}
+.card .meta{display:flex;gap:14px;margin-top:14px;font-size:13.5px;color:var(--muted2)}
+
+/* ── ฟอร์ม ────────────────────────────────────────────────── */
+.field{margin-bottom:18px}
+.field label{display:block;font-weight:600;margin-bottom:7px;font-size:15px}
+.field .req{color:var(--danger)}
+.field input,.field textarea,.field select{
+  width:100%;min-height:var(--tap);padding:12px 15px;font:inherit;font-size:16px;
+  border:1.5px solid var(--line);border-radius:var(--r);background:rgba(255,255,255,.04);color:var(--ink)
+}
+.field textarea{min-height:120px;resize:vertical}
+.field input::placeholder,.field textarea::placeholder{color:var(--muted2)}
+.field input:focus,.field textarea:focus,.field select:focus{
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(215,97,255,.22)}
+.field .help{font-size:13.5px;color:var(--muted2);margin-top:6px}
+.field.err input,.field.err textarea{border-color:var(--danger)}
+.msg{border-radius:var(--r);padding:14px 16px;font-size:14.5px;font-weight:600;margin-bottom:16px}
+.msg.ok{background:rgba(74,222,128,.14);color:var(--ok);border:1px solid rgba(74,222,128,.35)}
+.msg.bad{background:rgba(255,107,107,.14);color:var(--danger);border:1px solid rgba(255,107,107,.35)}
+
+/* ── กล่องแคบตรงกลาง (login/contact) ─────────────────────── */
+.narrow{max-width:440px;margin:0 auto}
+.auth-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:30px 26px}
+.auth-card h1{font-size:24px;margin-bottom:6px}
+.auth-card p.sub{color:var(--muted);margin-bottom:22px;font-size:15px}
+.switch{text-align:center;margin-top:16px;font-size:14.5px;color:var(--muted)}
+.switch a{color:var(--accent);font-weight:700}

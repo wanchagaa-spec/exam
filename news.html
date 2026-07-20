@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ข่าวสาร / กิจกรรม — ข้อสอบ</title>
+<meta name="description" content="ข่าวสารและกิจกรรมล่าสุดของเว็บไซต์รวบรวมข้อสอบ">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/news.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:20px">
+    <div class="wrap">
+      <span class="eyebrow">ข่าวสาร / กิจกรรม</span>
+      <h1>ความเคลื่อนไหวล่าสุด</h1>
+      <p class="lead">ติดตามวิชาใหม่ ๆ ที่เปิดให้ทำ และการปรับปรุงระบบ</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap">
+      <div class="grid c2" id="newsList"></div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+  renderHeader("news.html");
+  renderFooter();
+
+  document.getElementById("newsList").innerHTML = NEWS.map(n => `
+    <div class="card">
+      <span class="tag">${n.date}</span>
+      <h3>${n.title}</h3>
+      <p>${n.body}</p>
+    </div>
+  `).join("");
+</script>
+</body>
+</html>

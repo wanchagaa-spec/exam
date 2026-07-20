@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ดาวน์โหลดเอกสาร — ข้อสอบ</title>
+<meta name="description" content="เอกสารและไฟล์ดาวน์โหลดที่เกี่ยวข้องกับการเตรียมตัวสอบ">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/downloads.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:20px">
+    <div class="wrap">
+      <span class="eyebrow">ดาวน์โหลดเอกสาร</span>
+      <h1>เอกสารประกอบการเตรียมสอบ</h1>
+      <p class="lead">ไฟล์ตัวอย่าง — ผู้ดูแลเว็บสามารถเปลี่ยนลิงก์เป็นไฟล์จริงได้ภายหลัง</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap">
+      <div class="grid c2" id="downloadList"></div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+  renderHeader("downloads.html");
+  renderFooter();
+
+  document.getElementById("downloadList").innerHTML = DOWNLOADS.map(d => `
+    <a class="card" href="${d.href}" style="display:flex;align-items:center;gap:16px">
+      <span style="font-size:30px">📄</span>
+      <span>
+        <span class="tag" style="margin-bottom:6px">${d.type}</span>
+        <h3 style="font-size:17px">${d.title}</h3>
+      </span>
+    </a>
+  `).join("");
+</script>
+</body>
+</html>

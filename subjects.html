@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>รายวิชา / ทำข้อสอบ — ข้อสอบ</title>
+<meta name="description" content="รายชื่อวิชาที่เปิดให้ทดลองทำข้อสอบ สุ่มข้อสอบจากคลังใหญ่ พร้อมจับเวลา">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/subjects.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:20px">
+    <div class="wrap">
+      <span class="eyebrow">รายชื่อวิชา</span>
+      <h1>เลือกวิชาที่จะทดลองทำ</h1>
+      <p class="lead">แต่ละวิชามีคลังข้อสอบจำนวนมาก ระบบจะสุ่มข้อสอบชุดใหม่ให้ทุกครั้งที่กดเริ่มทำ</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap">
+      <div class="grid c3" id="subjectList"></div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+  renderHeader("subjects.html");
+  renderFooter();
+
+  document.getElementById("subjectList").innerHTML = SUBJECTS.map(s => `
+    <a class="card" href="exam.html?subject=${s.slug}">
+      <span class="tag">${s.icon} คลัง ${s.bank} ข้อ</span>
+      <h3>${s.name}</h3>
+      <p>${s.desc}</p>
+      <div class="meta"><span>🎯 สุ่ม ${s.draw} ข้อ / ครั้ง</span><span>⏱ ${s.minutes} นาที</span></div>
+    </a>
+  `).join("");
+</script>
+</body>
+</html>

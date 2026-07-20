@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ติดต่อเรา — ข้อสอบ</title>
+<meta name="description" content="ช่องทางติดต่อทีมงานเว็บไซต์รวบรวมข้อสอบ">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/contact.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:20px">
+    <div class="wrap">
+      <span class="eyebrow">ติดต่อเรา</span>
+      <h1>ทักหาเราได้ทุกช่องทาง</h1>
+      <p class="lead">มีคำถาม ข้อเสนอแนะ หรืออยากแจ้งปัญหาการใช้งาน ส่งข้อความมาได้เลย ทีมงานจะติดต่อกลับทางอีเมล</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap">
+      <div class="grid c2" style="align-items:start">
+
+        <div class="card">
+          <div id="msg"></div>
+          <form id="cForm">
+            <div class="field">
+              <label for="cName">ชื่อ–สกุล <span class="req">*</span></label>
+              <input type="text" id="cName" required>
+            </div>
+            <div class="field">
+              <label for="cEmail">อีเมลติดต่อกลับ <span class="req">*</span></label>
+              <input type="email" id="cEmail" required>
+            </div>
+            <div class="field">
+              <label for="cMsg">ข้อความ <span class="req">*</span></label>
+              <textarea id="cMsg" required maxlength="1000" placeholder="เล่ารายละเอียดที่ต้องการติดต่อ"></textarea>
+            </div>
+            <button class="btn p block" type="submit">ส่งข้อความ</button>
+          </form>
+        </div>
+
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <h3 style="margin-bottom:14px">ช่องทางอื่น</h3>
+            <p style="margin-bottom:10px">👤 ผู้ประสานงาน: <b id="cName2"></b></p>
+            <p style="margin-bottom:10px">📞 โทร: <a id="cPhone"></a></p>
+            <p style="margin-bottom:10px">📘 <a id="cFb" target="_blank" rel="noopener">Facebook Page</a></p>
+          </div>
+          <div class="card">
+            <p class="muted">ฟอร์มนี้จะส่งข้อความเข้าอีเมลของผู้ดูแลเว็บไซต์โดยตรง ไม่มีการเก็บข้อมูลไปใช้ในทางอื่น</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script>
+  renderHeader("contact.html");
+  renderFooter();
+
+  document.getElementById("cName2").textContent = APP.contactName;
+  document.getElementById("cPhone").textContent = APP.contactPhone;
+  document.getElementById("cPhone").href = "tel:" + APP.contactPhone.replace(/-/g,"");
+  document.getElementById("cFb").href = APP.facebook;
+  document.getElementById("cFb").textContent = "Facebook Page";
+
+  document.getElementById("cForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const name = document.getElementById("cName").value.trim();
+    const email = document.getElementById("cEmail").value.trim();
+    const text = document.getElementById("cMsg").value.trim();
+    const btn = e.target.querySelector("button");
+    btn.disabled = true; btn.textContent = "กำลังส่ง…";
+
+    const res = await apiCall("contact", { name, email, text });
+
+    if (res.ok){
+      document.getElementById("msg").innerHTML =
+        '<div class="msg ok">ส่งข้อความเรียบร้อยแล้ว ทีมงานจะติดต่อกลับทางอีเมล' +
+        (APP.demoMode ? " (โหมดตัวอย่าง — ยังไม่ได้ส่งอีเมลจริง)" : "") + "</div>";
+      e.target.reset();
+    } else {
+      document.getElementById("msg").innerHTML = '<div class="msg bad">ส่งไม่สำเร็จ ลองใหม่อีกครั้ง</div>';
+    }
+    btn.disabled = false; btn.textContent = "ส่งข้อความ";
+  };
+</script>
+</body>
+</html>

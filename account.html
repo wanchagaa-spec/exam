@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>บัญชีของฉัน — ข้อสอบ</title>
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<main>
+  <section class="section" style="padding-top:56px">
+    <div class="wrap narrow">
+      <div class="auth-card">
+        <h1 id="hi"></h1>
+        <p class="sub">ประวัติการทำข้อสอบของคุณจะแสดงที่นี่เมื่อเชื่อมระบบหลังบ้านจริงแล้ว</p>
+        <a class="btn p block" href="subjects.html" style="margin-bottom:10px">ทำข้อสอบต่อ</a>
+        <button class="btn s block" id="logout">ออกจากระบบ</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script>
+  renderHeader("account.html");
+  renderFooter();
+
+  if (!requireLogin()) { /* redirected */ }
+  const user = getSession();
+  if (user) document.getElementById("hi").textContent = "สวัสดี " + user.name;
+
+  document.getElementById("logout").onclick = () => { clearSession(); location.href = "index.html"; };
+</script>
+</body>
+</html>
