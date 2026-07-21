@@ -86,45 +86,60 @@ function doGet(e) {
   return json({ ok: true, msg: 'exam site endpoint' });
 }
 
+/* action ที่แค่อ่านข้อมูล ไม่แก้ไขอะไร — ข้ามการล็อกได้ ไม่ต้องรอคิวหลังไมค์การเขียนของคนอื่น
+   (ช่วยให้การโหลดบอร์ด/รายการต่าง ๆ เร็วขึ้น โดยเฉพาะเวลามีคนใช้งานพร้อมกันหลายคน) */
+const READ_ONLY_ACTIONS = new Set([
+  'login', 'listPosts', 'listComments', 'listNotifications',
+  'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs'
+]);
+
 /* ══════════════════════════ doPost ══════════════════════════ */
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     if (body.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
 
+    if (READ_ONLY_ACTIONS.has(body.action)) {
+      return json(routeAction_(body));
+    }
+
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
-      switch (body.action) {
-        case 'register':            return json(register(body));
-        case 'login':                return json(login(body));
-        case 'updateAvatar':         return json(updateAvatar(body));
-        case 'contact':              return json(contact(body));
-        case 'submitExam':           return json(submitExam(body));
-        case 'createPost':           return json(createPost(body));
-        case 'listPosts':            return json(listPosts(body));
-        case 'deletePost':           return json(deletePost(body));
-        case 'toggleLike':           return json(toggleLike(body));
-        case 'addComment':           return json(addComment(body));
-        case 'listComments':         return json(listComments(body));
-        case 'deleteComment':        return json(deleteComment(body));
-        case 'listNotifications':    return json(listNotifications(body));
-        case 'markNotificationsRead': return json(markNotificationsRead(body));
-        case 'adminLogin':           return json(adminLogin(body));
-        case 'adminListQuestions':   return json(adminListQuestions(body));
-        case 'adminAddQuestion':     return json(adminAddQuestion(body));
-        case 'adminDeleteQuestion':  return json(adminDeleteQuestion(body));
-        case 'adminListBlueprintConfigs':  return json(adminListBlueprintConfigs(body));
-        case 'adminSaveBlueprintConfig':   return json(adminSaveBlueprintConfig(body));
-        case 'adminDeleteBlueprintConfig': return json(adminDeleteBlueprintConfig(body));
-        case 'adminSetActiveBlueprintConfig': return json(adminSetActiveBlueprintConfig(body));
-        default:                     return json({ ok: false, error: 'unknown action' });
-      }
+      return json(routeAction_(body));
     } finally {
       lock.releaseLock();
     }
   } catch (err) {
     return json({ ok: false, error: String(err) });
+  }
+}
+
+function routeAction_(body) {
+  switch (body.action) {
+    case 'register':            return register(body);
+    case 'login':                return login(body);
+    case 'updateAvatar':         return updateAvatar(body);
+    case 'contact':              return contact(body);
+    case 'submitExam':           return submitExam(body);
+    case 'createPost':           return createPost(body);
+    case 'listPosts':            return listPosts(body);
+    case 'deletePost':           return deletePost(body);
+    case 'toggleLike':           return toggleLike(body);
+    case 'addComment':           return addComment(body);
+    case 'listComments':         return listComments(body);
+    case 'deleteComment':        return deleteComment(body);
+    case 'listNotifications':    return listNotifications(body);
+    case 'markNotificationsRead': return markNotificationsRead(body);
+    case 'adminLogin':           return adminLogin(body);
+    case 'adminListQuestions':   return adminListQuestions(body);
+    case 'adminAddQuestion':     return adminAddQuestion(body);
+    case 'adminDeleteQuestion':  return adminDeleteQuestion(body);
+    case 'adminListBlueprintConfigs':  return adminListBlueprintConfigs(body);
+    case 'adminSaveBlueprintConfig':   return adminSaveBlueprintConfig(body);
+    case 'adminDeleteBlueprintConfig': return adminDeleteBlueprintConfig(body);
+    case 'adminSetActiveBlueprintConfig': return adminSetActiveBlueprintConfig(body);
+    default:                     return { ok: false, error: 'unknown action' };
   }
 }
 
