@@ -9,7 +9,7 @@ window.APP = {
      ไม่มีข้อมูลส่งออกไปไหนจริง ให้ลูกค้าทดลองเว็บได้ก่อนเชื่อมหลังบ้านจริง
      ⚠ ก่อนใช้งานจริง ให้เปลี่ยนเป็น false และตั้ง endpoint + token ให้ตรงกับ gas/Code.gs */
   demoMode: false,
-  endpoint: "https://script.google.com/macros/s/AKfycbzajb2FuPJeuIsrpEGOqkjT-Q5b7ptfiJNgcxzpZZhYy0AiLTOQjGo5RF2uKCcEsywa/exec",                            // URL ของ Apps Script Web app (ดู gas/Code.gs)
+  endpoint: "https://script.google.com/macros/s/AKfycbwUQZOOj_YEw3zyUBXRpdzh_p4LufRZyPxRDt_Oi0xEscA2MOtdjos6BgITfFBGl4TW/exec",                            // URL ของ Apps Script Web app (ดู gas/Code.gs)
   token:    "ai75jg8f3d9g7k3",      // ต้องตรงกับ TOKEN ใน gas/Code.gs
 
   facebook: "https://www.facebook.com/",   // ★ ใส่ลิงก์ Facebook Page จริง
