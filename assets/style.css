@@ -61,11 +61,13 @@ img{max-width:100%;display:block}
 header.site{position:sticky;top:0;z-index:50;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
   box-shadow:0 2px 16px rgba(215,97,255,.25)}
-.nav{display:flex;align-items:center;gap:14px;padding:12px 20px;max-width:var(--wrap);margin:0 auto}
-.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;margin-right:auto;color:#fff}
-.brand .dot{width:11px;height:11px;border-radius:50%;
-  background:#fff;box-shadow:0 0 14px rgba(255,255,255,.8)}
-.navicons{display:flex;align-items:center;gap:6px;position:relative}
+.nav{display:flex;align-items:center;gap:12px;padding:12px 20px;max-width:var(--wrap);margin:0 auto}
+.searchbar{flex:1;min-width:0}
+.searchbar input{width:100%;height:42px;padding:0 18px;border:none;border-radius:999px;
+  background:rgba(255,255,255,.22);color:#fff;font:inherit;font-size:14.5px}
+.searchbar input::placeholder{color:rgba(255,255,255,.8)}
+.searchbar input:focus{outline:none;background:rgba(255,255,255,.32)}
+.navicons{display:flex;align-items:center;gap:6px;position:relative;flex:none}
 .navicon{display:flex;align-items:center;justify-content:center;position:relative;
   width:44px;height:44px;border-radius:50%;font-size:19px;color:#fff;background:none;border:none;
   cursor:pointer;line-height:1}
@@ -89,10 +91,19 @@ header.site{position:sticky;top:0;z-index:50;
 .notif-item:last-child{border-bottom:none}
 .notif-item.unread{background:rgba(215,97,255,.07)}
 @media (max-width:600px){
-  .brand span:not(.dot){display:none}
   .uname{display:none}
   .userbtn{padding:5px}
+  .searchbar input{padding:0 14px;font-size:13.5px}
 }
+
+/* ── หน้าต่างโพสต์ด่วน (เปิดจากปุ่ม + บน header) ─────────────────────── */
+.pmask{position:fixed;inset:0;z-index:70;background:rgba(10,4,20,.6);display:none;place-items:center;padding:20px}
+.pmask:not(.hidden){display:grid}
+.pmodal{background:var(--bg0);border-radius:var(--r-lg);padding:24px 22px;max-width:460px;width:100%;
+  box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.pmodal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.pmodal-head h3{font-size:19px}
+.pmodal-head button{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:4px 8px}
 
 /* ── ฟุตเตอร์ ─────────────────────────────────────────────── */
 footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 46px}

@@ -43,15 +43,17 @@ function avatarHtml(user, size){
   return `<span class="avatar initial" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.45)}px">${escHtml(initial)}</span>`;
 }
 
-/* ── หัวเว็บ + นำทาง (แถบไอคอนรวม: โพสต์ / หน้าแรก / ข่าวสาร / แจ้งเตือน / โปรไฟล์) ── */
+/* ── หัวเว็บ + นำทาง (ปุ่มโพสต์ / ค้นหา / หน้าแรก / ข่าวสาร / แจ้งเตือน / โปรไฟล์) ── */
 function renderHeader(active){
   const page = (location.pathname.split("/").pop() || "index.html");
   const cur = active || page;
   const user = getSession();
   const on = href => cur === href ? "on" : "";
+  const params = new URLSearchParams(location.search);
 
-  const iconsHtml = user ? `
-      <a class="navicon" href="news.html#compose" title="โพสต์" aria-label="โพสต์">+</a>
+  const leftHtml = user ? `<button class="navicon" id="composeBtn" type="button" title="โพสต์" aria-label="โพสต์">+</button>` : "";
+
+  const rightHtml = user ? `
       <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
       <a class="navicon ${on("news.html")}" href="news.html" title="ข่าวสาร" aria-label="ข่าวสาร">📰</a>
       <button class="navicon" id="bellBtn" type="button" title="แจ้งเตือน" aria-label="แจ้งเตือน">
@@ -81,11 +83,41 @@ function renderHeader(active){
     ${APP.demoMode ? '<div class="demo-banner">โหมดตัวอย่าง · ข้อมูลทั้งหมดในเว็บนี้เป็นข้อมูลจำลอง ยังไม่เชื่อมระบบจริง</div>' : ""}
     <header class="site">
       <div class="nav">
-        <a class="brand" href="index.html"><span class="dot"></span><span>${escHtml(APP.orgName)}</span></a>
-        <div class="navicons">${iconsHtml}</div>
+        ${leftHtml}
+        <form class="searchbar" id="headerSearchForm">
+          <input type="search" id="headerSearchInput" placeholder="ค้นหาวิชาหรือโพสต์…" value="${escHtml(params.get("q") || "")}" aria-label="ค้นหา">
+        </form>
+        <div class="navicons">${rightHtml}</div>
       </div>
     </header>
+    ${user ? `
+    <div class="pmask hidden" id="composeMask">
+      <div class="pmodal">
+        <div class="pmodal-head">
+          <h3>โพสต์ใหม่</h3>
+          <button type="button" id="composeClose" aria-label="ปิด">✕</button>
+        </div>
+        <form id="composeForm">
+          <div class="field">
+            <label for="composeSubject">หมวดหมู่ (วิชา)</label>
+            <select id="composeSubject" required></select>
+          </div>
+          <div class="field">
+            <label for="composeText">ข้อความ <span class="req">*</span></label>
+            <textarea id="composeText" placeholder="เขียนอะไรบางอย่าง…" required maxlength="1000"></textarea>
+          </div>
+          <div id="composeMsg"></div>
+          <button class="btn p block" type="submit">โพสต์</button>
+        </form>
+      </div>
+    </div>` : ""}
   `);
+
+  document.getElementById("headerSearchForm").onsubmit = (e) => {
+    e.preventDefault();
+    const q = document.getElementById("headerSearchInput").value.trim();
+    if (q) location.href = "search.html?q=" + encodeURIComponent(q);
+  };
 
   if (!user) return;
 
@@ -142,6 +174,52 @@ function renderHeader(active){
       notifBadge.classList.remove("hidden");
     }
   })();
+
+  /* ── ปุ่ม + เปิดหน้าต่างโพสต์ทันที (ใช้ได้ทุกหน้า ไม่ต้องเปลี่ยนหน้าไปที่ข่าวสาร) ── */
+  const composeBtn = document.getElementById("composeBtn");
+  const composeMask = document.getElementById("composeMask");
+  const composeSubject = document.getElementById("composeSubject");
+  const composeText = document.getElementById("composeText");
+  const composeMsg = document.getElementById("composeMsg");
+
+  if (typeof SUBJECTS !== "undefined") {
+    composeSubject.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+  }
+
+  function openCompose(){
+    composeMsg.innerHTML = "";
+    composeText.value = "";
+    composeMask.classList.remove("hidden");
+    composeText.focus();
+  }
+  function closeCompose(){ composeMask.classList.add("hidden"); }
+
+  composeBtn.onclick = openCompose;
+  document.getElementById("composeClose").onclick = closeCompose;
+  composeMask.onclick = (e) => { if (e.target === composeMask) closeCompose(); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCompose(); });
+
+  document.getElementById("composeForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const subject = composeSubject.value;
+    const text = composeText.value.trim();
+    if (!subject || !text) return;
+
+    const btn = e.target.querySelector("button[type=submit]");
+    btn.disabled = true; btn.textContent = "กำลังโพสต์…";
+
+    const res = await apiCall("createPost", { email: user.email, name: user.name, subject, text });
+
+    btn.disabled = false; btn.textContent = "โพสต์";
+    if (res.ok){
+      composeMsg.innerHTML = '<div class="msg ok">โพสต์เรียบร้อยแล้ว</div>';
+      composeText.value = "";
+      document.dispatchEvent(new CustomEvent("examSitePostCreated", { detail: res.post }));
+      setTimeout(closeCompose, 900);
+    } else {
+      composeMsg.innerHTML = `<div class="msg bad">${escHtml(res.error || "โพสต์ไม่สำเร็จ")}</div>`;
+    }
+  };
 }
 
 /* ── ฟุตเตอร์ ─────────────────────────────────────────────────── */
