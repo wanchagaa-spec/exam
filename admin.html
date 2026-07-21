@@ -80,9 +80,10 @@
           <div class="muted" id="bankCount" style="padding-bottom:14px"></div>
         </div>
 
-        <div style="display:flex;gap:8px;margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:0">
+        <div style="display:flex;gap:8px;margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:0;flex-wrap:wrap">
           <button class="btn s" id="tabBtnBank" style="border-radius:10px 10px 0 0;border-bottom:none">คลังข้อสอบ</button>
           <button class="btn s" id="tabBtnBlueprint" style="border-radius:10px 10px 0 0;border-bottom:none;background:transparent">โครงสร้างชุดข้อสอบ</button>
+          <button class="btn s" id="tabBtnImport" style="border-radius:10px 10px 0 0;border-bottom:none;background:transparent">นำเข้าหลายข้อ (JSON)</button>
         </div>
 
         <div id="tabBank">
@@ -163,6 +164,24 @@
         </div>
       </div>
 
+      <div id="tabImport" class="hidden">
+        <div class="card">
+          <h3 style="margin-bottom:6px">นำเข้าข้อสอบหลายข้อพร้อมกัน</h3>
+          <p class="muted" style="margin-bottom:16px">
+            วางข้อมูลเป็น JSON array แล้วกดนำเข้า ระบบจะเพิ่มทีละข้อเข้าคลังของ "วิชาที่เลือกไว้ด้านบน"
+            แต่ละข้อเป็น object: <code>{ "type":"mc|tf|fill", "strand":"ชื่อสาระ", "text":"โจทย์", "options":["..."], "answer":"...", "score":3, "note":"คำอธิบายเฉลย" }</code>
+            — <code>strand</code> ต้องตรงกับชื่อในลิสต์สาระของวิชานั้นเป๊ะ ๆ, type <code>fill</code> ไม่ต้องมี <code>options</code> และใส่คำตอบที่ยอมรับได้หลายแบบใน <code>answer</code> คั่นด้วย <code>|</code>
+          </p>
+          <div id="importMsg"></div>
+          <div class="field">
+            <label for="importJson">ข้อมูล JSON</label>
+            <textarea id="importJson" rows="10" placeholder='[{"type":"mc","strand":"...","text":"...","options":["...","..."],"answer":"...","score":3,"note":"..."}]' style="min-height:220px;font-family:monospace;font-size:13.5px"></textarea>
+          </div>
+          <button class="btn p" id="importBtn" type="button">นำเข้าทั้งหมด</button>
+          <div id="importResult" style="margin-top:14px"></div>
+        </div>
+      </div>
+
     </div>
   </section>
 </main>
@@ -223,6 +242,8 @@
 
     document.getElementById("tabBtnBank").onclick = () => switchTab("bank");
     document.getElementById("tabBtnBlueprint").onclick = () => switchTab("blueprint");
+    document.getElementById("tabBtnImport").onclick = () => switchTab("import");
+    document.getElementById("importBtn").onclick = onBulkImport;
 
     buildOptInputs();
     populateStrandSelect();
@@ -247,14 +268,16 @@
   }
 
   function switchTab(which){
-    const bank = which === "bank";
-    document.getElementById("tabBank").classList.toggle("hidden", !bank);
-    document.getElementById("tabBlueprint").classList.toggle("hidden", bank);
-    document.getElementById("tabBtnBank").classList.toggle("on", bank);
-    document.getElementById("tabBtnBlueprint").classList.toggle("on", !bank);
-    document.getElementById("tabBtnBank").style.background = bank ? "" : "transparent";
-    document.getElementById("tabBtnBlueprint").style.background = bank ? "transparent" : "";
-    if (!bank) loadBlueprint();
+    document.getElementById("tabBank").classList.toggle("hidden", which !== "bank");
+    document.getElementById("tabBlueprint").classList.toggle("hidden", which !== "blueprint");
+    document.getElementById("tabImport").classList.toggle("hidden", which !== "import");
+    ["Bank","Blueprint","Import"].forEach(name => {
+      const on = which === name.toLowerCase();
+      const btn = document.getElementById("tabBtn" + name);
+      btn.classList.toggle("on", on);
+      btn.style.background = on ? "" : "transparent";
+    });
+    if (which === "blueprint") loadBlueprint();
   }
 
   function currentStrands(){
@@ -494,6 +517,52 @@
       ? '<div class="msg ok">บันทึกโครงสร้างชุดข้อสอบเรียบร้อยแล้ว</div>'
       : `<div class="msg bad">${escHtml(res.error || "บันทึกไม่สำเร็จ")}</div>`;
     btn.disabled = false; btn.textContent = "บันทึกโครงสร้างชุดข้อสอบ";
+  }
+
+  /* ── นำเข้าข้อสอบหลายข้อจาก JSON ── */
+  async function onBulkImport(){
+    const subject = document.getElementById("subjectSel").value;
+    const raw = document.getElementById("importJson").value.trim();
+    const out = document.getElementById("importResult");
+    const msg = document.getElementById("importMsg");
+    out.innerHTML = ""; msg.innerHTML = "";
+
+    let items;
+    try {
+      items = JSON.parse(raw);
+      if (!Array.isArray(items)) throw new Error("ข้อมูลต้องเป็น JSON array ([...])");
+    } catch (e) {
+      msg.innerHTML = `<div class="msg bad">อ่าน JSON ไม่ได้: ${escHtml(e.message)}</div>`;
+      return;
+    }
+    if (!items.length){ msg.innerHTML = '<div class="msg bad">ไม่มีข้อมูลให้นำเข้า</div>'; return; }
+
+    const btn = document.getElementById("importBtn");
+    btn.disabled = true;
+    let ok = 0;
+    const fails = [];
+
+    for (let i = 0; i < items.length; i++){
+      btn.textContent = `กำลังนำเข้า… (${i + 1}/${items.length})`;
+      const q = items[i] || {};
+      const res = await apiCall("adminAddQuestion", {
+        adminPassword: adminPass(), subject,
+        type: q.type, strand: q.strand, text: q.text,
+        options: q.options || [], answer: q.answer,
+        score: q.score || 1, note: q.note || ""
+      });
+      if (res.ok) ok++;
+      else fails.push("ข้อที่ " + (i + 1) + ": " + (res.error || "ไม่ทราบสาเหตุ"));
+    }
+
+    btn.disabled = false;
+    btn.textContent = "นำเข้าทั้งหมด";
+    out.innerHTML = `<div class="msg ${fails.length ? "bad" : "ok"}">นำเข้าสำเร็จ ${ok} ข้อ จากทั้งหมด ${items.length} ข้อ` +
+      (fails.length ? ` (ล้มเหลว ${fails.length} ข้อ)` : "") + "</div>" +
+      (fails.length ? '<ul style="margin-top:8px;font-size:13.5px;color:var(--danger);padding-left:20px">' +
+        fails.map(f => `<li>${escHtml(f)}</li>`).join("") + "</ul>" : "");
+
+    loadList();
   }
 })();
 </script>
