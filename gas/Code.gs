@@ -1,8 +1,8 @@
 /**
  * หลังบ้านเว็บไซต์ "ข้อสอบ" — Google Apps Script
  *
- * รองรับ: สมัคร/ล็อกอินสมาชิก, สุ่มข้อสอบจากคลังใหญ่ + จับเวลา + ตรวจให้คะแนน,
- *          ฟอร์มติดต่อ (ส่งอีเมล), พื้นที่แสดงความเห็น,
+ * รองรับ: สมัคร/ล็อกอินสมาชิกด้วยอีเมล, สุ่มข้อสอบจากคลังใหญ่ + จับเวลา + ตรวจให้คะแนน,
+ *          ฟอร์มติดต่อ (ส่งอีเมล), บอร์ดความคิดเห็นแบบโพส/ถูกใจ/คอมเมนต์ (คล้าย Facebook),
  *          หน้าแอดมิน (admin.html) สำหรับเพิ่ม/ลบข้อสอบพร้อมเฉลยเต็มในคลัง
  *
  * ⚠ ไฟล์นี้คือที่เก็บเฉลยข้อสอบ ห้ามคัดลอกคอลัมน์ "answer" ไปไว้ในหน้าเว็บเด็ดขาด
@@ -18,10 +18,15 @@
  *   7. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
  *
  * โครงสร้างชีตที่ต้องมี (สร้างเองใน Google Sheet เดียวกัน):
- *   Users      : timestamp | username | name | passHash
+ *   Users      : timestamp | email | name | age | school | passHash
+ *               ── ล็อกอินด้วยอีเมล (ไม่มี username แล้ว)
  *   Contact    : timestamp | name | email | message
- *   Feedback   : timestamp | name | text
- *   Results    : timestamp | subject | username | name | score | total | percent | passed | usedSeconds | auto
+ *   Posts      : id | timestamp | email | name | subject | text | likeCount
+ *               ── โพสของบอร์ดความคิดเห็น subject ต้องตรงกับ slug ใน assets/demo-data.js
+ *   Likes      : postId | email
+ *               ── 1 แถวต่อ 1 คนที่กดถูกใจ 1 โพส (ใช้เช็คว่าคนนี้เคยกดหรือยัง และลบแถวเมื่อกดยกเลิก)
+ *   Comments   : id | postId | timestamp | email | name | text
+ *   Results    : timestamp | subject | email | name | score | total | percent | passed | usedSeconds | auto
  *   Blueprint  : subject | configName | active | order | strand | count
  *               ── "โครงสร้างชุดข้อสอบ" ของแต่ละวิชา แต่ละวิชามีได้หลายชุด (configName ตั้งชื่อเอง)
  *                  ชุดที่ active = TRUE คือชุดที่ระบบใช้สุ่มข้อสอบจริงตอนนักเรียนทำข้อสอบ (มีได้ทีละ 1 ชุดต่อวิชา)
@@ -92,8 +97,12 @@ function doPost(e) {
         case 'register':            return json(register(body));
         case 'login':                return json(login(body));
         case 'contact':              return json(contact(body));
-        case 'feedback':             return json(feedback(body));
         case 'submitExam':           return json(submitExam(body));
+        case 'createPost':           return json(createPost(body));
+        case 'listPosts':            return json(listPosts(body));
+        case 'toggleLike':           return json(toggleLike(body));
+        case 'addComment':           return json(addComment(body));
+        case 'listComments':         return json(listComments(body));
         case 'adminLogin':           return json(adminLogin(body));
         case 'adminListQuestions':   return json(adminListQuestions(body));
         case 'adminAddQuestion':     return json(adminAddQuestion(body));
@@ -112,45 +121,51 @@ function doPost(e) {
   }
 }
 
-/* ══════════════════════════ สมาชิก ══════════════════════════ */
-function hashPass_(username, password) {
-  const raw = String(username).toLowerCase() + ':' + password + ':' + TOKEN;
+/* ══════════════════════════ สมาชิก (ล็อกอินด้วยอีเมล) ══════════════════════════ */
+function hashPass_(email, password) {
+  const raw = String(email).toLowerCase() + ':' + password + ':' + TOKEN;
   const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
   return digest.map(b => (b + 256).toString(16).slice(-2)).join('');
 }
 
-function register(body) {
-  const username = clean(String(body.username || '').trim().toLowerCase());
-  const name     = clean(String(body.name || '').trim());
-  const password = String(body.password || '');
-  if (!username || !name || password.length < 6) return { ok: false, error: 'ข้อมูลไม่ครบ หรือรหัสผ่านสั้นเกินไป' };
+function looksLikeEmail_(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '')); }
 
-  const sh = sheet_('Users', ['timestamp', 'username', 'name', 'passHash']);
+function register(body) {
+  const email    = clean(String(body.email || '').trim().toLowerCase());
+  const name     = clean(String(body.name || '').trim());
+  const age      = Number(body.age) || 0;
+  const school   = clean(String(body.school || '').trim());
+  const password = String(body.password || '');
+  if (!email || !looksLikeEmail_(email)) return { ok: false, error: 'อีเมลไม่ถูกต้อง' };
+  if (!name || !school || age < 1 || age > 120 || password.length < 6)
+    return { ok: false, error: 'ข้อมูลไม่ครบ หรือรหัสผ่านสั้นเกินไป' };
+
+  const sh = sheet_('Users', ['timestamp', 'email', 'name', 'age', 'school', 'passHash']);
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][1]).toLowerCase() === username) return { ok: false, error: 'มีชื่อผู้ใช้นี้อยู่แล้ว' };
+    if (String(rows[i][1]).toLowerCase() === email) return { ok: false, error: 'มีอีเมลนี้สมัครไว้แล้ว' };
   }
-  sh.appendRow([new Date(), username, name, hashPass_(username, password)]);
-  return { ok: true, username, name };
+  sh.appendRow([new Date(), email, name, age, school, hashPass_(email, password)]);
+  return { ok: true, email, name, age, school };
 }
 
 function login(body) {
-  const username = String(body.username || '').trim().toLowerCase();
+  const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
-  const sh = sheet_('Users', ['timestamp', 'username', 'name', 'passHash']);
+  const sh = sheet_('Users', ['timestamp', 'email', 'name', 'age', 'school', 'passHash']);
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][1]).toLowerCase() === username) {
-      if (rows[i][3] === hashPass_(username, password)) {
-        return { ok: true, username, name: rows[i][2] };
+    if (String(rows[i][1]).toLowerCase() === email) {
+      if (rows[i][5] === hashPass_(email, password)) {
+        return { ok: true, email, name: rows[i][2], age: rows[i][3], school: rows[i][4] };
       }
-      return { ok: false, error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+      return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
     }
   }
-  return { ok: false, error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
+  return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
 }
 
-/* ══════════════════════════ ติดต่อ / ความเห็น ══════════════════════════ */
+/* ══════════════════════════ ติดต่อ ══════════════════════════ */
 function contact(body) {
   const name = clean(body.name), email = clean(body.email), text = clean(body.text);
   if (!name || !email || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
@@ -165,11 +180,131 @@ function contact(body) {
   return { ok: true };
 }
 
-function feedback(body) {
-  const name = clean(body.name), text = clean(body.text);
-  if (!name || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
-  sheet_('Feedback', ['timestamp', 'name', 'text']).appendRow([new Date(), name, text]);
-  return { ok: true };
+/* ══════════════════════════ บอร์ดความคิดเห็น (โพส/ถูกใจ/คอมเมนต์) ══════════════════════════ */
+function postsSheet_()    { return sheet_('Posts', ['id', 'timestamp', 'email', 'name', 'subject', 'text', 'likeCount']); }
+function likesSheet_()    { return sheet_('Likes', ['postId', 'email']); }
+function commentsSheet_() { return sheet_('Comments', ['id', 'postId', 'timestamp', 'email', 'name', 'text']); }
+
+function createPost(body) {
+  const email   = clean(String(body.email || '').trim().toLowerCase());
+  const name    = clean(String(body.name || '').trim());
+  const subject = clean(String(body.subject || '').trim());
+  const text    = clean(String(body.text || '').trim());
+  if (!email || !name || !subject || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+
+  const id = 'p_' + Utilities.getUuid().slice(0, 10);
+  const timestamp = new Date();
+  postsSheet_().appendRow([id, timestamp, email, name, subject, text, 0]);
+  return { ok: true, post: { id, timestamp: timestamp.toISOString(), name, subject, text, likeCount: 0, commentCount: 0, likedByMe: false } };
+}
+
+function listPosts(body) {
+  const subject     = String(body.subject || '').trim();
+  const sort        = body.sort === 'likes' ? 'likes' : 'new';
+  const viewerEmail = String(body.viewerEmail || '').trim().toLowerCase();
+
+  const rows = postsSheet_().getDataRange().getValues();
+  const commentCounts = {};
+  commentsSheet_().getDataRange().getValues().slice(1).forEach(r => {
+    if (!r[1]) return;
+    commentCounts[r[1]] = (commentCounts[r[1]] || 0) + 1;
+  });
+  const likedSet = new Set();
+  if (viewerEmail) {
+    likesSheet_().getDataRange().getValues().slice(1).forEach(r => {
+      if (String(r[1] || '').toLowerCase() === viewerEmail) likedSet.add(String(r[0]));
+    });
+  }
+
+  const posts = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+    if (subject && String(r[4]) !== subject) continue;
+    posts.push({
+      id: String(r[0]),
+      timestamp: (r[1] instanceof Date ? r[1] : new Date(r[1])).toISOString(),
+      name: String(r[3] || ''),
+      subject: String(r[4] || ''),
+      text: String(r[5] || ''),
+      likeCount: Number(r[6]) || 0,
+      commentCount: commentCounts[String(r[0])] || 0,
+      likedByMe: likedSet.has(String(r[0]))
+    });
+  }
+
+  posts.sort((a, b) => sort === 'likes'
+    ? (b.likeCount - a.likeCount) || (new Date(b.timestamp) - new Date(a.timestamp))
+    : (new Date(b.timestamp) - new Date(a.timestamp)));
+
+  return { ok: true, posts };
+}
+
+function toggleLike(body) {
+  const postId = String(body.postId || '').trim();
+  const email  = String(body.email || '').trim().toLowerCase();
+  if (!postId || !email) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+
+  const likeSh = likesSheet_();
+  const likeRows = likeSh.getDataRange().getValues();
+  let likeRowIndex = -1;
+  for (let i = 1; i < likeRows.length; i++) {
+    if (String(likeRows[i][0]) === postId && String(likeRows[i][1]).toLowerCase() === email) { likeRowIndex = i + 1; break; }
+  }
+
+  const postSh = postsSheet_();
+  const postRows = postSh.getDataRange().getValues();
+  let postRowIndex = -1;
+  for (let i = 1; i < postRows.length; i++) {
+    if (String(postRows[i][0]) === postId) { postRowIndex = i + 1; break; }
+  }
+  if (postRowIndex < 0) return { ok: false, error: 'ไม่พบโพสต์นี้' };
+
+  const currentCount = Number(postRows[postRowIndex - 1][6]) || 0;
+  let liked, newCount;
+  if (likeRowIndex > 0) {
+    likeSh.deleteRow(likeRowIndex);
+    liked = false;
+    newCount = Math.max(0, currentCount - 1);
+  } else {
+    likeSh.appendRow([postId, email]);
+    liked = true;
+    newCount = currentCount + 1;
+  }
+  postSh.getRange(postRowIndex, 7).setValue(newCount);
+
+  return { ok: true, liked, likeCount: newCount };
+}
+
+function addComment(body) {
+  const postId = String(body.postId || '').trim();
+  const email  = clean(String(body.email || '').trim().toLowerCase());
+  const name   = clean(String(body.name || '').trim());
+  const text   = clean(String(body.text || '').trim());
+  if (!postId || !email || !name || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+
+  const id = 'c_' + Utilities.getUuid().slice(0, 10);
+  const timestamp = new Date();
+  commentsSheet_().appendRow([id, postId, timestamp, email, name, text]);
+  return { ok: true, comment: { id, timestamp: timestamp.toISOString(), name, text } };
+}
+
+function listComments(body) {
+  const postId = String(body.postId || '').trim();
+  const rows = commentsSheet_().getDataRange().getValues();
+  const comments = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || String(r[1]) !== postId) continue;
+    comments.push({
+      id: String(r[0]),
+      timestamp: (r[2] instanceof Date ? r[2] : new Date(r[2])).toISOString(),
+      name: String(r[4] || ''),
+      text: String(r[5] || '')
+    });
+  }
+  comments.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  return { ok: true, comments };
 }
 
 /* ══════════════════════════ ข้อสอบ: สุ่มจากคลัง ══════════════════════════ */
@@ -417,8 +552,8 @@ function submitExam(body) {
   const percent = total ? Math.round(score / total * 100) : 0;
   const passed = percent >= 60;
 
-  sheet_('Results', ['timestamp', 'subject', 'username', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
-    .appendRow([new Date(), body.subject, clean(id.username), clean(id.name), score, total, percent,
+  sheet_('Results', ['timestamp', 'subject', 'email', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
+    .appendRow([new Date(), body.subject, clean(id.email), clean(id.name), score, total, percent,
                 passed ? 'ผ่าน' : 'ไม่ผ่าน', meta.used || '', meta.auto ? 'ใช่' : '']);
 
   CacheService.getScriptCache().remove(body.sessionId);

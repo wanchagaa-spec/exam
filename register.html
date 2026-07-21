@@ -26,8 +26,16 @@
             <input type="text" id="n" required>
           </div>
           <div class="field">
-            <label for="u">ชื่อผู้ใช้</label>
-            <input type="text" id="u" autocomplete="username" required>
+            <label for="age">อายุ</label>
+            <input type="number" id="age" min="1" max="120" required>
+          </div>
+          <div class="field">
+            <label for="school">โรงเรียน</label>
+            <input type="text" id="school" required>
+          </div>
+          <div class="field">
+            <label for="email">อีเมล</label>
+            <input type="email" id="email" autocomplete="email" required>
           </div>
           <div class="field">
             <label for="p">รหัสผ่าน (อย่างน้อย 6 ตัว)</label>
@@ -49,15 +57,17 @@
   document.getElementById("regForm").onsubmit = async (e) => {
     e.preventDefault();
     const name = document.getElementById("n").value.trim();
-    const username = document.getElementById("u").value.trim();
+    const age = document.getElementById("age").value;
+    const school = document.getElementById("school").value.trim();
+    const email = document.getElementById("email").value.trim();
     const password = document.getElementById("p").value;
     const btn = e.target.querySelector("button");
     btn.disabled = true; btn.textContent = "กำลังสมัคร…";
 
-    const res = await apiCall("register", { name, username, password });
+    const res = await apiCall("register", { name, age, school, email, password });
 
     if (res.ok){
-      setSession({ username, name });
+      setSession({ email: res.email || email, name: res.name || name, age: res.age || age, school: res.school || school });
       location.href = "index.html";
     } else {
       document.getElementById("msg").innerHTML = `<div class="msg bad">${escHtml(res.error || "สมัครไม่สำเร็จ")}</div>`;

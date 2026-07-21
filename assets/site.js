@@ -27,7 +27,7 @@ const NAV = [
   { href:"subjects.html",  label:"รายวิชา / ทำข้อสอบ" },
   { href:"news.html",      label:"ข่าวสาร / กิจกรรม" },
   { href:"downloads.html", label:"ดาวน์โหลดเอกสาร" },
-  { href:"feedback.html",  label:"พื้นที่แสดงความเห็น" },
+  { href:"feedback.html",  label:"บอร์ดความคิดเห็น" },
   { href:"contact.html",   label:"ติดต่อเรา" }
 ];
 
@@ -175,6 +175,17 @@ function demoBlueprintLoad(subject){
   return (active && active.sections) || [];
 }
 
+/* โหมดตัวอย่าง: บอร์ดความคิดเห็น (โพส/ถูกใจ/คอมเมนต์) เก็บรวมทุกวิชาใน localStorage */
+const DEMO_POSTS_KEY = "examSiteDemoPosts";
+const DEMO_LIKES_KEY = "examSiteDemoLikes";
+const DEMO_COMMENTS_KEY = "examSiteDemoComments";
+function demoPostsLoad(){ try { return JSON.parse(localStorage.getItem(DEMO_POSTS_KEY) || "[]"); } catch(e){ return []; } }
+function demoPostsSave(list){ localStorage.setItem(DEMO_POSTS_KEY, JSON.stringify(list)); }
+function demoLikesLoad(){ try { return JSON.parse(localStorage.getItem(DEMO_LIKES_KEY) || "[]"); } catch(e){ return []; } }
+function demoLikesSave(list){ localStorage.setItem(DEMO_LIKES_KEY, JSON.stringify(list)); }
+function demoCommentsLoad(){ try { return JSON.parse(localStorage.getItem(DEMO_COMMENTS_KEY) || "[]"); } catch(e){ return []; } }
+function demoCommentsSave(list){ localStorage.setItem(DEMO_COMMENTS_KEY, JSON.stringify(list)); }
+
 /* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
 async function blueprintSummary(subject){
   const res = await apiCall("blueprint", { subject });
@@ -204,23 +215,23 @@ async function demoApi(action, payload){
   const users = demoUsers();
 
   if (action === "register"){
-    if (users.some(u => u.username === payload.username))
-      return { ok:false, error:"มีชื่อผู้ใช้นี้อยู่แล้ว" };
-    users.push({ username: payload.username, name: payload.name, passHash: await sha256(payload.password) });
+    const email = String(payload.email || "").trim().toLowerCase();
+    if (users.some(u => u.email === email))
+      return { ok:false, error:"มีอีเมลนี้สมัครไว้แล้ว" };
+    users.push({ email, name: payload.name, age: payload.age, school: payload.school, passHash: await sha256(payload.password) });
     demoSaveUsers(users);
-    return { ok:true };
+    return { ok:true, email, name: payload.name, age: payload.age, school: payload.school };
   }
 
   if (action === "login"){
-    const u = users.find(x => x.username === payload.username);
+    const email = String(payload.email || "").trim().toLowerCase();
+    const u = users.find(x => x.email === email);
     if (!u || u.passHash !== await sha256(payload.password))
-      return { ok:false, error:"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
-    return { ok:true, name: u.name, username: u.username };
+      return { ok:false, error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง" };
+    return { ok:true, email: u.email, name: u.name, age: u.age, school: u.school };
   }
 
   if (action === "contact") return { ok:true };
-
-  if (action === "feedback") return { ok:true };
 
   if (action === "adminLogin"){
     return payload.adminPassword === APP.demoAdminPassword
@@ -292,6 +303,75 @@ async function demoApi(action, payload){
     if (!found) return { ok:false, error:"ไม่พบโครงสร้างชุดนี้" };
     demoBlueprintConfigsSave(payload.subject, configs);
     return { ok:true };
+  }
+
+  if (action === "createPost"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    const name = String(payload.name || "").trim();
+    const subject = String(payload.subject || "").trim();
+    const text = String(payload.text || "").trim();
+    if (!email || !name || !subject || !text) return { ok:false, error:"กรอกข้อมูลไม่ครบ" };
+    const posts = demoPostsLoad();
+    const post = { id: "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+                    timestamp: new Date().toISOString(), email, name, subject, text, likeCount: 0 };
+    posts.push(post);
+    demoPostsSave(posts);
+    return { ok:true, post: Object.assign({}, post, { commentCount:0, likedByMe:false }) };
+  }
+
+  if (action === "listPosts"){
+    const subject = String(payload.subject || "").trim();
+    const sort = payload.sort === "likes" ? "likes" : "new";
+    const viewerEmail = String(payload.viewerEmail || "").trim().toLowerCase();
+    const likes = demoLikesLoad();
+    const comments = demoCommentsLoad();
+    let posts = demoPostsLoad();
+    if (subject) posts = posts.filter(p => p.subject === subject);
+    posts = posts.map(p => Object.assign({}, p, {
+      commentCount: comments.filter(c => c.postId === p.id).length,
+      likedByMe: viewerEmail ? likes.some(l => l.postId === p.id && l.email === viewerEmail) : false
+    }));
+    posts.sort((a,b) => sort === "likes"
+      ? (b.likeCount - a.likeCount) || (new Date(b.timestamp) - new Date(a.timestamp))
+      : (new Date(b.timestamp) - new Date(a.timestamp)));
+    return { ok:true, posts };
+  }
+
+  if (action === "toggleLike"){
+    const postId = payload.postId, email = String(payload.email || "").trim().toLowerCase();
+    if (!postId || !email) return { ok:false, error:"ข้อมูลไม่ครบ" };
+    const posts = demoPostsLoad();
+    const post = posts.find(p => p.id === postId);
+    if (!post) return { ok:false, error:"ไม่พบโพสต์นี้" };
+    let likes = demoLikesLoad();
+    const idx = likes.findIndex(l => l.postId === postId && l.email === email);
+    let liked;
+    if (idx >= 0){ likes.splice(idx,1); liked = false; post.likeCount = Math.max(0,(post.likeCount||0)-1); }
+    else { likes.push({ postId, email }); liked = true; post.likeCount = (post.likeCount||0)+1; }
+    demoLikesSave(likes);
+    demoPostsSave(posts);
+    return { ok:true, liked, likeCount: post.likeCount };
+  }
+
+  if (action === "addComment"){
+    const postId = payload.postId;
+    const email = String(payload.email || "").trim().toLowerCase();
+    const name = String(payload.name || "").trim();
+    const text = String(payload.text || "").trim();
+    if (!postId || !email || !name || !text) return { ok:false, error:"กรอกข้อมูลไม่ครบ" };
+    const comments = demoCommentsLoad();
+    const comment = { id: "c_" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+                       postId, timestamp: new Date().toISOString(), email, name, text };
+    comments.push(comment);
+    demoCommentsSave(comments);
+    return { ok:true, comment };
+  }
+
+  if (action === "listComments"){
+    const postId = payload.postId;
+    const comments = demoCommentsLoad().filter(c => c.postId === postId)
+      .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+    return { ok:true, comments };
   }
 
   return { ok:false, error:"โหมดตัวอย่างไม่รองรับคำสั่งนี้" };

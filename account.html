@@ -17,8 +17,9 @@
     <div class="wrap narrow">
       <div class="auth-card">
         <h1 id="hi"></h1>
-        <p class="sub">ประวัติการทำข้อสอบของคุณจะแสดงที่นี่เมื่อเชื่อมระบบหลังบ้านจริงแล้ว</p>
+        <div id="profile" class="muted" style="margin-bottom:22px;font-size:14.5px"></div>
         <a class="btn p block" href="subjects.html" style="margin-bottom:10px">ทำข้อสอบต่อ</a>
+        <a class="btn s block" href="feedback.html" style="margin-bottom:10px">ไปที่บอร์ดความคิดเห็น</a>
         <button class="btn s block" id="logout">ออกจากระบบ</button>
       </div>
     </div>
@@ -32,7 +33,11 @@
 
   if (!requireLogin()) { /* redirected */ }
   const user = getSession();
-  if (user) document.getElementById("hi").textContent = "สวัสดี " + user.name;
+  if (user){
+    document.getElementById("hi").textContent = "สวัสดี " + user.name;
+    document.getElementById("profile").innerHTML =
+      `${escHtml(user.email || "")}${user.school ? " · " + escHtml(user.school) : ""}${user.age ? " · อายุ " + escHtml(String(user.age)) + " ปี" : ""}`;
+  }
 
   document.getElementById("logout").onclick = () => { clearSession(); location.href = "index.html"; };
 </script>

@@ -281,7 +281,7 @@
       return i;
     }
 
-    const list = q.options || ["ถูก","ผิด"];
+    const list = (q.options && q.options.length) ? q.options : ["ถูก","ผิด"];
     const w = document.createElement("div");
     w.className = "opts";
     w.setAttribute("role","radiogroup");
@@ -393,7 +393,7 @@
       action: "submitExam",
       subject: subject.slug,
       sessionId,
-      identity: { name: user.name, username: user.username },
+      identity: { name: user.name, email: user.email },
       answers: ans,
       meta: { used: subject.minutes*60 - Math.max(left,0), auto: !!auto }
     };
