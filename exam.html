@@ -79,6 +79,9 @@
   .rev .l{font-size:14.5px;color:var(--muted);margin-top:4px}
   .rev .l b{color:var(--ink);font-weight:600}
   .mid{max-width:640px;margin:0 auto;padding:24px 16px 120px}
+  .sechead{font-weight:800;font-size:15.5px;color:var(--accent);margin:26px 0 12px;
+    padding-top:18px;border-top:2px solid var(--line)}
+  .sechead:first-child{margin-top:0;padding-top:0;border-top:none}
 </style>
 </head>
 <body>
@@ -115,6 +118,7 @@
   const esc = escHtml;
   const LET = ["ก","ข","ค","ง","จ","ฉ"];
 
+  const FALLBACK_COUNT = 10; // ใช้เมื่อยังไม่ได้ตั้งโครงสร้างชุดข้อสอบเลย
   let questions = [], sessionId = null, left = 0, timer = null, sent = false, demoAnswerKey = null;
   const ans = {};
 
@@ -123,10 +127,10 @@
       <div class="examhead">
         <span class="eyebrow">${subject.icon} ${esc(subject.name)}</span>
         <h1 style="margin:10px 0 4px">เตรียมตัวก่อนเริ่มทำ</h1>
-        <p class="muted">คลังข้อสอบวิชานี้มี ${subject.bank} ข้อ ระบบจะสุ่มมาให้ ${subject.draw} ข้อในการทำครั้งนี้</p>
+        <p class="muted" id="bpDesc">กำลังโหลดโครงสร้างชุดข้อสอบ…</p>
       </div>
       <div class="examhead">
-        <div class="rule"><b>จำนวนข้อ</b><span>${subject.draw} ข้อ (สุ่มจากคลัง ${subject.bank} ข้อ)</span></div>
+        <div class="rule"><b>โครงสร้างข้อสอบ</b><span id="bpRule">กำลังโหลด…</span></div>
         <div class="rule"><b>เวลา</b><span>${subject.minutes} นาที หมดเวลาระบบจะส่งอัตโนมัติ</span></div>
         <div class="rule"><b>เกณฑ์ผ่าน</b><span>${PASS_PERCENT}%</span></div>
         <div class="rule"><b>จำนวนครั้ง</b><span>ทำได้หลายครั้งเพื่อฝึกฝน แต่ละครั้งได้ข้อสอบชุดใหม่</span></div>
@@ -139,17 +143,41 @@
 
   document.getElementById("start").onclick = startExam;
 
+  (async function loadBlueprintPreview(){
+    const { sections, total } = await blueprintSummary(subject.slug);
+    if (!sections.length){
+      document.getElementById("bpDesc").textContent = "ยังไม่ได้ตั้งโครงสร้างชุดข้อสอบ ระบบจะสุ่มข้อสอบจากคลังทั้งหมดแทน";
+      document.getElementById("bpRule").textContent = "สุ่มจากคลังทั้งหมด";
+      return;
+    }
+    document.getElementById("bpDesc").textContent = "ชุดข้อสอบนี้แบ่งเป็น " + sections.length + " ส่วน รวม " + total + " ข้อ";
+    document.getElementById("bpRule").textContent = sections.length + " ส่วน รวม " + total + " ข้อ";
+  })();
+
   async function startExam(){
     const btn = document.getElementById("start");
     btn.disabled = true; btn.textContent = "กำลังเตรียมข้อสอบ…";
 
     if (APP.demoMode){
       const bank = demoBankLoad(subject.slug);
-      if (bank.length){
-        const chosen = shuffleArr(bank.slice()).slice(0, Math.min(subject.draw, bank.length));
+      const bp = demoBlueprintLoad(subject.slug);
+      if (bank.length && bp.length){
+        demoAnswerKey = {};
+        questions = [];
+        bp.forEach((sec, i) => {
+          const pool = bank.filter(q => q.strand === sec.strand);
+          const chosen = shuffleArr(pool.slice()).slice(0, Math.min(sec.count, pool.length));
+          const label = "ส่วนที่ " + (i+1) + (sec.strand ? ": " + sec.strand : "");
+          chosen.forEach(q => {
+            demoAnswerKey[q.id] = { type: q.type, answer: q.answer, score: q.score || 1, note: q.note || "" };
+            questions.push({ id: q.id, type: q.type, text: q.text, options: q.options, section: label });
+          });
+        });
+      } else if (bank.length){
+        const chosen = shuffleArr(bank.slice()).slice(0, Math.min(FALLBACK_COUNT, bank.length));
         demoAnswerKey = {};
         chosen.forEach(q => { demoAnswerKey[q.id] = { type: q.type, answer: q.answer, score: q.score || 1, note: q.note || "" }; });
-        questions = chosen.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options }));
+        questions = chosen.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options, section: null }));
       } else {
         questions = genDemoQuestions(subject);
         demoAnswerKey = null;
@@ -158,7 +186,7 @@
     } else {
       try {
         const url = APP.endpoint + "?action=exam&subject=" + encodeURIComponent(subject.slug) +
-          "&count=" + subject.draw + "&token=" + encodeURIComponent(APP.token);
+          "&token=" + encodeURIComponent(APP.token);
         const r = await fetch(url);
         const res = await r.json();
         if (!res.ok) throw new Error(res.error || "โหลดข้อสอบไม่สำเร็จ");
@@ -177,14 +205,15 @@
   }
 
   function genDemoQuestions(sub){
-    const n = sub.draw;
+    const n = FALLBACK_COUNT;
     const list = [];
     for (let i = 1; i <= n; i++){
       list.push({
         id: "d" + i,
         type: "mc",
         text: "ตัวอย่างข้อที่ " + i + " ของวิชา" + sub.name + " (รอโจทย์จริงจากผู้ดูแลเว็บไซต์)",
-        options: ["ตัวเลือก ก","ตัวเลือก ข","ตัวเลือก ค","ตัวเลือก ง"]
+        options: ["ตัวเลือก ก","ตัวเลือก ข","ตัวเลือก ค","ตัวเลือก ง"],
+        section: null
       });
     }
     return list;
@@ -215,7 +244,15 @@
     `;
 
     const box = document.getElementById("qs");
+    let lastSection;
     questions.forEach((q, i) => {
+      if (q.section && q.section !== lastSection){
+        const h = document.createElement("div");
+        h.className = "sechead";
+        h.textContent = q.section;
+        box.appendChild(h);
+        lastSection = q.section;
+      }
       const c = document.createElement("div");
       c.className = "q";
       c.id = "c_" + q.id;

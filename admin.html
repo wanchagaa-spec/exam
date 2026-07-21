@@ -32,6 +32,12 @@
   .pv-opt.correct{border-color:var(--ok);background:rgba(74,222,128,.1);font-weight:700}
   .pv-note{font-size:14px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
   .pv-empty{color:var(--muted2);font-size:14.5px}
+  .secrow{display:flex;gap:10px;align-items:center;margin-bottom:11px;flex-wrap:wrap}
+  .secrow .secn{flex:none;width:30px;height:44px;display:flex;align-items:center;font-weight:700;color:var(--muted2)}
+  .secrow select{flex:2;min-width:180px}
+  .secrow input[type=number]{flex:none;width:90px}
+  .secrow .hint{flex:none;font-size:13px;color:var(--muted2);min-width:110px}
+  .tabbar-btn.on{background:var(--card-hi);border-bottom-color:transparent}
 </style>
 </head>
 <body>
@@ -74,6 +80,12 @@
           <div class="muted" id="bankCount" style="padding-bottom:14px"></div>
         </div>
 
+        <div style="display:flex;gap:8px;margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:0">
+          <button class="btn s" id="tabBtnBank" style="border-radius:10px 10px 0 0;border-bottom:none">คลังข้อสอบ</button>
+          <button class="btn s" id="tabBtnBlueprint" style="border-radius:10px 10px 0 0;border-bottom:none;background:transparent">โครงสร้างชุดข้อสอบ</button>
+        </div>
+
+        <div id="tabBank">
         <div class="grid c2" style="align-items:start">
           <div class="card">
             <h3 style="margin-bottom:16px">เพิ่มข้อสอบใหม่</h3>
@@ -86,6 +98,11 @@
                   <option value="tf">ถูก / ผิด</option>
                   <option value="fill">เติมคำตอบ (พิมพ์เอง)</option>
                 </select>
+              </div>
+              <div class="field">
+                <label for="qStrand">สาระ / หมวดเนื้อหา <span class="req">*</span></label>
+                <select id="qStrand"></select>
+                <p class="help">ใช้ตอนกำหนด "โครงสร้างชุดข้อสอบ" ว่าแต่ละส่วนจะสุ่มกี่ข้อจากสาระไหน</p>
               </div>
               <div class="field">
                 <label for="qText">โจทย์ <span class="req">*</span></label>
@@ -134,6 +151,18 @@
         </div>
       </div>
 
+      <div id="tabBlueprint" class="hidden">
+        <div class="card">
+          <h3 style="margin-bottom:6px">โครงสร้างชุดข้อสอบ</h3>
+          <p class="muted" style="margin-bottom:18px">กำหนดว่าชุดข้อสอบของวิชานี้แบ่งเป็นกี่ส่วน แต่ละส่วนสุ่มกี่ข้อจากสาระไหน — ระบบจะสุ่มตามนี้ทุกครั้งที่นักเรียนเริ่มทำข้อสอบ</p>
+          <div id="blueprintMsg"></div>
+          <div id="sectionWrap"></div>
+          <button class="btn s" id="addSectionBtn" type="button" style="margin-bottom:18px">+ เพิ่มส่วน</button>
+          <div class="muted" id="blueprintTotal" style="margin-bottom:14px;font-weight:600"></div>
+          <button class="btn p" id="saveBlueprintBtn" type="button">บันทึกโครงสร้างชุดข้อสอบ</button>
+        </div>
+      </div>
+
     </div>
   </section>
 </main>
@@ -145,6 +174,8 @@
   "use strict";
   const ADMIN_PASS_KEY = "examSiteAdminPass";
   const LET = ["ก","ข","ค","ง"];
+  let sectionCounter = 0;
+  let bankCountByStrand = {};
 
   function adminPass(){ return sessionStorage.getItem(ADMIN_PASS_KEY) || ""; }
   function setAdminPass(p){ sessionStorage.setItem(ADMIN_PASS_KEY, p); }
@@ -182,11 +213,20 @@
   function initPanel(){
     const sel = document.getElementById("subjectSel");
     sel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
-    sel.onchange = loadList;
+    sel.onchange = () => {
+      populateStrandSelect();
+      loadList();
+      if (!document.getElementById("tabBlueprint").classList.contains("hidden")) loadBlueprint();
+    };
 
     document.getElementById("logoutBtn").onclick = () => { clearAdminPass(); location.reload(); };
 
+    document.getElementById("tabBtnBank").onclick = () => switchTab("bank");
+    document.getElementById("tabBtnBlueprint").onclick = () => switchTab("blueprint");
+
     buildOptInputs();
+    populateStrandSelect();
+
     document.getElementById("qType").onchange = (e) => {
       const t = e.target.value;
       document.getElementById("mcBlock").classList.toggle("hidden", t !== "mc");
@@ -199,8 +239,31 @@
     document.getElementById("addForm").addEventListener("input", updatePreview);
     document.getElementById("addForm").addEventListener("change", updatePreview);
 
+    document.getElementById("addSectionBtn").onclick = () => { addSectionRow(); updateBlueprintTotal(); };
+    document.getElementById("saveBlueprintBtn").onclick = onSaveBlueprint;
+
     updatePreview();
     loadList();
+  }
+
+  function switchTab(which){
+    const bank = which === "bank";
+    document.getElementById("tabBank").classList.toggle("hidden", !bank);
+    document.getElementById("tabBlueprint").classList.toggle("hidden", bank);
+    document.getElementById("tabBtnBank").classList.toggle("on", bank);
+    document.getElementById("tabBtnBlueprint").classList.toggle("on", !bank);
+    document.getElementById("tabBtnBank").style.background = bank ? "" : "transparent";
+    document.getElementById("tabBtnBlueprint").style.background = bank ? "transparent" : "";
+    if (!bank) loadBlueprint();
+  }
+
+  function currentStrands(){
+    return SUBJECT_STRANDS[document.getElementById("subjectSel").value] || [];
+  }
+
+  function populateStrandSelect(){
+    const strands = currentStrands();
+    document.getElementById("qStrand").innerHTML = strands.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("");
   }
 
   /* ── ตัวอย่างที่นักเรียนจะเห็น อัปเดตสดขณะพิมพ์ ── */
@@ -275,6 +338,7 @@
       <div class="qrow">
         <div class="top">
           <div style="flex:1">
+            ${q.strand ? `<span class="tag" style="margin-bottom:8px">${escHtml(q.strand)}</span>` : ""}
             <div class="t">${escHtml(q.text)}</div>
             ${(q.options && q.options.length) ? `<div class="opts">${q.options.map(o => escHtml(o)).join(" · ")}</div>` : ""}
             <div class="ans">เฉลย (${typeLabel[q.type] || q.type}): ${escHtml(answerDisplay)} · ${q.score || 1} คะแนน</div>
@@ -300,11 +364,14 @@
     e.preventDefault();
     const subject = document.getElementById("subjectSel").value;
     const type = document.getElementById("qType").value;
+    const strand = document.getElementById("qStrand").value;
     const text = document.getElementById("qText").value.trim();
     const score = parseInt(document.getElementById("qScore").value, 10) || 1;
     const note = document.getElementById("qNote").value.trim();
     const msg = document.getElementById("addMsg");
     msg.innerHTML = "";
+
+    if (!strand){ msg.innerHTML = '<div class="msg bad">เลือกสาระ/หมวดเนื้อหาก่อน</div>'; return; }
 
     let options = [], answer = "";
     if (type === "mc"){
@@ -331,19 +398,102 @@
     btn.disabled = true; btn.textContent = "กำลังเพิ่ม…";
 
     const res = await apiCall("adminAddQuestion", {
-      adminPassword: adminPass(), subject, type, text, options, answer, score, note
+      adminPassword: adminPass(), subject, type, strand, text, options, answer, score, note
     });
 
     if (res.ok){
       msg.innerHTML = '<div class="msg ok">เพิ่มข้อสอบเรียบร้อยแล้ว</div>';
       e.target.reset();
       buildOptInputs();
+      populateStrandSelect();
       document.getElementById("qType").dispatchEvent(new Event("change"));
       loadList();
     } else {
       msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "เพิ่มไม่สำเร็จ")}</div>`;
     }
     btn.disabled = false; btn.textContent = "เพิ่มข้อสอบนี้เข้าคลัง";
+  }
+
+  /* ── โครงสร้างชุดข้อสอบ (Blueprint) ── */
+  function addSectionRow(section){
+    const wrap = document.getElementById("sectionWrap");
+    const strands = currentStrands();
+    const row = document.createElement("div");
+    row.className = "secrow";
+    row.innerHTML = `
+      <span class="secn"></span>
+      <select class="secStrand">${strands.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("")}</select>
+      <input type="number" class="secCount" min="1" value="${(section && section.count) || 1}">
+      <span class="hint"></span>
+      <button class="del" type="button">ลบ</button>
+    `;
+    wrap.appendChild(row);
+    if (section && section.strand) row.querySelector(".secStrand").value = section.strand;
+    row.querySelector(".del").onclick = () => { row.remove(); renumberSections(); updateBlueprintTotal(); };
+    row.querySelector(".secCount").oninput = updateBlueprintTotal;
+    row.querySelector(".secStrand").onchange = updateSectionHints;
+    renumberSections();
+    updateSectionHints();
+  }
+
+  function renumberSections(){
+    [...document.querySelectorAll("#sectionWrap .secrow")].forEach((row, i) => {
+      row.querySelector(".secn").textContent = (i + 1) + ".";
+    });
+  }
+
+  function updateBlueprintTotal(){
+    const rows = [...document.querySelectorAll("#sectionWrap .secrow")];
+    const total = rows.reduce((s, row) => s + (parseInt(row.querySelector(".secCount").value, 10) || 0), 0);
+    document.getElementById("blueprintTotal").textContent =
+      rows.length ? (rows.length + " ส่วน รวม " + total + " ข้อ") : "ยังไม่มีส่วนใดเลย";
+  }
+
+  async function updateSectionHints(){
+    const subject = document.getElementById("subjectSel").value;
+    if (bankCountByStrand.subject !== subject){
+      const res = await apiCall("adminListQuestions", { adminPassword: adminPass(), subject });
+      const counts = {};
+      (res.questions || []).forEach(q => { counts[q.strand] = (counts[q.strand] || 0) + 1; });
+      bankCountByStrand = { subject, counts };
+    }
+    document.querySelectorAll("#sectionWrap .secrow").forEach(row => {
+      const strand = row.querySelector(".secStrand").value;
+      const n = bankCountByStrand.counts[strand] || 0;
+      row.querySelector(".hint").textContent = "(มีในคลัง " + n + " ข้อ)";
+    });
+  }
+
+  async function loadBlueprint(){
+    const subject = document.getElementById("subjectSel").value;
+    document.getElementById("sectionWrap").innerHTML = "";
+    document.getElementById("blueprintMsg").innerHTML = "";
+    bankCountByStrand = {};
+
+    const res = await apiCall("blueprint", { subject });
+    const sections = (res.ok && res.sections) || [];
+    if (!sections.length) addSectionRow();
+    else sections.forEach(s => addSectionRow(s));
+
+    await updateSectionHints();
+    updateBlueprintTotal();
+  }
+
+  async function onSaveBlueprint(){
+    const subject = document.getElementById("subjectSel").value;
+    const rows = [...document.querySelectorAll("#sectionWrap .secrow")];
+    const sections = rows.map(row => ({
+      strand: row.querySelector(".secStrand").value,
+      count: parseInt(row.querySelector(".secCount").value, 10) || 0
+    })).filter(s => s.count > 0);
+
+    const btn = document.getElementById("saveBlueprintBtn");
+    btn.disabled = true; btn.textContent = "กำลังบันทึก…";
+    const res = await apiCall("adminSaveBlueprint", { adminPassword: adminPass(), subject, sections });
+    document.getElementById("blueprintMsg").innerHTML = res.ok
+      ? '<div class="msg ok">บันทึกโครงสร้างชุดข้อสอบเรียบร้อยแล้ว</div>'
+      : `<div class="msg bad">${escHtml(res.error || "บันทึกไม่สำเร็จ")}</div>`;
+    btn.disabled = false; btn.textContent = "บันทึกโครงสร้างชุดข้อสอบ";
   }
 })();
 </script>

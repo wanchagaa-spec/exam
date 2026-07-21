@@ -162,6 +162,20 @@ function demoBankLoad(subject){
 }
 function demoBankSave(subject, list){ localStorage.setItem(demoBankKey(subject), JSON.stringify(list)); }
 
+/* โหมดตัวอย่าง: โครงสร้างชุดข้อสอบ (ส่วนที่ 1, 2, ... ดึงกี่ข้อจากสาระไหน) ต่อวิชา เก็บใน localStorage */
+function demoBlueprintKey(subject){ return "examSiteDemoBlueprint_" + subject; }
+function demoBlueprintLoad(subject){
+  try { return JSON.parse(localStorage.getItem(demoBlueprintKey(subject)) || "[]"); } catch(e){ return []; }
+}
+function demoBlueprintSave(subject, sections){ localStorage.setItem(demoBlueprintKey(subject), JSON.stringify(sections)); }
+
+/* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
+async function blueprintSummary(subject){
+  const res = await apiCall("blueprint", { subject });
+  const sections = (res.ok && res.sections) || [];
+  return { sections, total: sections.reduce((s,x) => s + (x.count||0), 0) };
+}
+
 async function apiCall(action, payload){
   if (APP.demoMode){
     return demoApi(action, payload);
@@ -214,7 +228,7 @@ async function demoApi(action, payload){
     const list = demoBankLoad(payload.subject);
     const id = payload.id || ("q_" + Date.now().toString(36));
     const q = { id, type: payload.type, text: payload.text, options: payload.options,
-                answer: payload.answer, score: payload.score, note: payload.note };
+                answer: payload.answer, score: payload.score, note: payload.note, strand: payload.strand || "" };
     const idx = list.findIndex(x => x.id === id);
     if (idx >= 0) list[idx] = q; else list.push(q);
     demoBankSave(payload.subject, list);
@@ -224,6 +238,16 @@ async function demoApi(action, payload){
   if (action === "adminDeleteQuestion"){
     if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
     demoBankSave(payload.subject, demoBankLoad(payload.subject).filter(q => q.id !== payload.id));
+    return { ok:true };
+  }
+
+  if (action === "blueprint"){
+    return { ok:true, sections: demoBlueprintLoad(payload.subject) };
+  }
+
+  if (action === "adminSaveBlueprint"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    demoBlueprintSave(payload.subject, payload.sections || []);
     return { ok:true };
   }
 

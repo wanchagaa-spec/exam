@@ -38,12 +38,19 @@
 
   document.getElementById("subjectList").innerHTML = SUBJECTS.map(s => `
     <a class="card" href="exam.html?subject=${s.slug}">
-      <span class="tag">${s.icon} คลัง ${s.bank} ข้อ</span>
+      <span class="tag">${s.icon} <span id="stat_${s.slug}">กำลังโหลด…</span></span>
       <h3>${s.name}</h3>
       <p>${s.desc}</p>
-      <div class="meta"><span>🎯 สุ่ม ${s.draw} ข้อ / ครั้ง</span><span>⏱ ${s.minutes} นาที</span></div>
+      <div class="meta"><span>⏱ ${s.minutes} นาที</span></div>
     </a>
   `).join("");
+
+  SUBJECTS.forEach(async s => {
+    const sum = await blueprintSummary(s.slug);
+    const el = document.getElementById("stat_" + s.slug);
+    if (!el) return;
+    el.textContent = sum.total ? (sum.sections.length + " ส่วน • " + sum.total + " ข้อ") : "ยังไม่ได้ตั้งโครงสร้างข้อสอบ";
+  });
 </script>
 </body>
 </html>

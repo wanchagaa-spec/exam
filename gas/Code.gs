@@ -18,13 +18,16 @@
  *   7. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
  *
  * โครงสร้างชีตที่ต้องมี (สร้างเองใน Google Sheet เดียวกัน):
- *   Users     : timestamp | username | name | passHash
- *   Contact   : timestamp | name | email | message
- *   Feedback  : timestamp | name | text
- *   Results   : timestamp | subject | username | name | score | total | percent | passed | usedSeconds | auto
- *   Q_<slug>  : id | type | text | options | answer | score | note
+ *   Users      : timestamp | username | name | passHash
+ *   Contact    : timestamp | name | email | message
+ *   Feedback   : timestamp | name | text
+ *   Results    : timestamp | subject | username | name | score | total | percent | passed | usedSeconds | auto
+ *   Blueprint  : subject | order | strand | count
+ *               ── "โครงสร้างชุดข้อสอบ" ของแต่ละวิชา กำหนดว่าส่วนที่เท่าไร สุ่มกี่ข้อจากสาระไหน
+ *                  จัดการผ่านหน้า admin.html ได้เลย ไม่ต้องพิมพ์ในชีตเอง (ระบบสร้าง/แก้ให้อัตโนมัติ)
+ *   Q_<slug>   : id | type | text | options | answer | score | note | strand
  *               ── หนึ่งชีตต่อหนึ่งวิชา ชื่อชีตต้องขึ้นต้นด้วย Q_ แล้วตามด้วย slug ของวิชา
- *                  เช่น Q_thai-m3, Q_math-m3 (slug ต้องตรงกับใน assets/demo-data.js)
+ *                  เช่น Q_math1, Q_physics (slug ต้องตรงกับใน assets/demo-data.js)
  *               type    : "mc" (ปรนัย) / "tf" (ถูก/ผิด) / "fill" (เติมคำตอบ พิมพ์เอง)
  *               options : ตัวเลือกคั่นด้วย | เช่น  60–80 ครั้ง/นาที|80–100 ครั้ง/นาที|100–120 ครั้ง/นาที
  *                         type เป็น tf หรือ fill ปล่อยว่างได้ (tf ใช้ ถูก|ผิด ให้อัตโนมัติ, fill ไม่มีตัวเลือก)
@@ -32,6 +35,8 @@
  *                         type fill ใส่คำตอบที่ยอมรับได้หลายแบบ คั่นด้วย | เช่น 10|๑๐|สิบ — ตอบถูกถ้าตรงแบบใดแบบหนึ่ง
  *               score   : คะแนนของข้อนั้น (ปล่อยว่าง = 1 คะแนน)
  *               note    : คำอธิบายเฉลย (ไม่บังคับ) พิมพ์สมการคณิตศาสตร์แบบ LaTeX ได้ เช่น $x^2+1$
+ *               strand  : สาระ/หมวดเนื้อหาของข้อนี้ ต้องตรงกับชื่อใน SUBJECT_STRANDS (assets/demo-data.js) เป๊ะ ๆ
+ *                         ใช้ตอนสุ่มข้อสอบแยกตามโครงสร้างชุดข้อสอบ (Blueprint)
  */
 
 const TOKEN          = 'exam-bank-a217053bc9a2';  // ★ ต้องตรงกับ APP.token ใน assets/site.js
@@ -62,7 +67,12 @@ function doGet(e) {
 
   if (p.action === 'exam') {
     if (p.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
-    return json(serveExam(p.subject, parseInt(p.count, 10) || 10));
+    return json(serveExam(p.subject));
+  }
+
+  if (p.action === 'blueprint') {
+    if (p.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
+    return json({ ok: true, sections: getBlueprint_(p.subject) });
   }
 
   return json({ ok: true, msg: 'exam site endpoint' });
@@ -87,6 +97,7 @@ function doPost(e) {
         case 'adminListQuestions':   return json(adminListQuestions(body));
         case 'adminAddQuestion':     return json(adminAddQuestion(body));
         case 'adminDeleteQuestion':  return json(adminDeleteQuestion(body));
+        case 'adminSaveBlueprint':   return json(adminSaveBlueprint(body));
         default:                     return json({ ok: false, error: 'unknown action' });
       }
     } finally {
@@ -177,29 +188,83 @@ function readBank_(subject) {
       options: options,
       answer: String(r[4] || '').trim(),
       score: Number(r[5]) || 1,
-      note: String(r[6] || '')
+      note: String(r[6] || ''),
+      strand: String(r[7] || '').trim()
     });
   }
   return out;
 }
 
-function serveExam(subject, count) {
+/** โครงสร้างชุดข้อสอบ (Blueprint sheet: subject | order | strand | count) เรียงตาม order */
+function getBlueprint_(subject) {
+  subject = String(subject || '').slice(0, 50);
+  const sh = ss_().getSheetByName('Blueprint');
+  if (!sh) return [];
+  const rows = sh.getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[0]) !== subject) continue;
+    out.push({ order: Number(r[1]) || 0, strand: String(r[2] || ''), count: Number(r[3]) || 0 });
+  }
+  out.sort((a, b) => a.order - b.order);
+  return out;
+}
+
+function adminSaveBlueprint(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const sections = Array.isArray(body.sections) ? body.sections : [];
+  if (!subject) return { ok: false, error: 'ไม่ได้ระบุวิชา' };
+
+  const sh = sheet_('Blueprint', ['subject', 'order', 'strand', 'count']);
+  const rows = sh.getDataRange().getValues();
+  const keep = [rows[0]]; // หัวตาราง
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== subject) keep.push(rows[i]);
+  }
+  sections.forEach((s, i) => {
+    keep.push([subject, i, clean(s.strand), Number(s.count) || 0]);
+  });
+
+  sh.clearContents();
+  if (keep.length) sh.getRange(1, 1, keep.length, 4).setValues(keep);
+  sh.setFrozenRows(1);
+
+  return { ok: true };
+}
+
+function serveExam(subject) {
   subject = String(subject || '').slice(0, 50);
   const bank = readBank_(subject);
   if (!bank.length) return { ok: false, error: 'ยังไม่มีคลังข้อสอบวิชานี้ (สร้างชีต Q_' + subject + ' ก่อน)' };
 
-  shuffle_(bank);
-  const picked = bank.slice(0, Math.min(count, bank.length));
+  const blueprint = getBlueprint_(subject);
+  const sections = blueprint.length ? blueprint : [{ order: 0, strand: '', count: Math.min(10, bank.length) }];
+
+  const picked = [];
+  const warnings = [];
+  sections.forEach((sec, i) => {
+    const pool = sec.strand ? bank.filter(q => q.strand === sec.strand) : bank.slice();
+    shuffle_(pool);
+    const take = pool.slice(0, Math.min(sec.count, pool.length));
+    if (take.length < sec.count) {
+      warnings.push('ส่วนที่ ' + (i + 1) + (sec.strand ? ' (' + sec.strand + ')' : '') +
+        ' มีข้อสอบในคลังไม่พอ (ต้องการ ' + sec.count + ' มีจริง ' + take.length + ')');
+    }
+    take.forEach(q => picked.push(Object.assign({ sectionLabel: 'ส่วนที่ ' + (i + 1) + (sec.strand ? ': ' + sec.strand : '') }, q)));
+  });
+
+  if (!picked.length) return { ok: false, error: 'ยังไม่มีข้อสอบในคลังที่ตรงกับโครงสร้างชุดข้อสอบที่ตั้งไว้' };
 
   const sessionId = Utilities.getUuid();
   const key = {};
   picked.forEach(q => { key[q.id] = { type: q.type, answer: q.answer, score: q.score, note: q.note }; });
   CacheService.getScriptCache().put(sessionId, JSON.stringify({ subject, key }), CACHE_SECONDS);
 
-  const questions = picked.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options }));
-  shuffle_(questions);
+  const questions = picked.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options, section: q.sectionLabel }));
 
-  return { ok: true, sessionId, questions };
+  return { ok: true, sessionId, questions, warnings };
 }
 
 function submitExam(body) {
@@ -267,11 +332,12 @@ function adminAddQuestion(body) {
   const answer  = clean(body.answer);
   const score   = Number(body.score) || 1;
   const note    = clean(body.note);
+  const strand  = clean(body.strand);
 
   if (!subject || !text || !answer) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
   if (type === 'mc' && options.length < 2) return { ok: false, error: 'ต้องมีตัวเลือกอย่างน้อย 2 ข้อ' };
 
-  const sh = sheet_('Q_' + subject, ['id', 'type', 'text', 'options', 'answer', 'score', 'note']);
+  const sh = sheet_('Q_' + subject, ['id', 'type', 'text', 'options', 'answer', 'score', 'note', 'strand']);
   const id = body.id && String(body.id).trim() ? String(body.id).trim() : 'q_' + Utilities.getUuid().slice(0, 8);
 
   const rows = sh.getDataRange().getValues();
@@ -280,7 +346,7 @@ function adminAddQuestion(body) {
     if (String(rows[i][0]) === id) { rowIndex = i + 1; break; }
   }
 
-  const rowData = [id, type, text, options.join('|'), answer, score, note];
+  const rowData = [id, type, text, options.join('|'), answer, score, note, strand];
   if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
   else sh.appendRow(rowData);
 
