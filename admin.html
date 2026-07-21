@@ -28,6 +28,10 @@
   .secrow select{flex:2;min-width:180px}
   .secrow input[type=number]{flex:none;width:90px}
   .secrow .hint{flex:none;font-size:13px;color:var(--muted2);min-width:110px}
+  .cfgrow{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;margin-bottom:10px}
+  .cfgrow .name{font-weight:600;display:flex;align-items:center;gap:8px}
+  .cfgrow .btns{display:flex;gap:8px;flex-wrap:wrap}
+  .active-tag{background:var(--ok);color:#fff;font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px}
   .tabbar-btn.on{background:var(--card-hi);border-bottom-color:transparent}
 </style>
 </head>
@@ -86,12 +90,25 @@
       <div id="tabBlueprint" class="hidden">
         <div class="card">
           <h3 style="margin-bottom:6px">โครงสร้างชุดข้อสอบ</h3>
-          <p class="muted" style="margin-bottom:18px">กำหนดว่าชุดข้อสอบของวิชานี้แบ่งเป็นกี่ส่วน แต่ละส่วนสุ่มกี่ข้อจากสาระไหน — ระบบจะสุ่มตามนี้ทุกครั้งที่นักเรียนเริ่มทำข้อสอบ</p>
+          <p class="muted" style="margin-bottom:18px">วิชานี้สร้างโครงสร้างได้หลายชุด ตั้งชื่อแยกกันไว้ แล้วเลือกได้ว่าจะ "ใช้งาน" ชุดไหน — ระบบจะสุ่มข้อสอบตามชุดที่ใช้งานอยู่เท่านั้นทุกครั้งที่นักเรียนเริ่มทำข้อสอบ</p>
           <div id="blueprintMsg"></div>
-          <div id="sectionWrap"></div>
-          <button class="btn s" id="addSectionBtn" type="button" style="margin-bottom:18px">+ เพิ่มส่วน</button>
-          <div class="muted" id="blueprintTotal" style="margin-bottom:14px;font-weight:600"></div>
-          <button class="btn p" id="saveBlueprintBtn" type="button">บันทึกโครงสร้างชุดข้อสอบ</button>
+
+          <div id="configList" style="margin-bottom:16px"></div>
+          <button class="btn s" id="newConfigBtn" type="button" style="margin-bottom:24px">+ สร้างโครงสร้างใหม่</button>
+
+          <div id="configEditor" class="hidden" style="border-top:1px solid var(--line);padding-top:20px">
+            <div class="field" style="max-width:320px">
+              <label for="configNameInput">ชื่อโครงสร้างชุดนี้</label>
+              <input type="text" id="configNameInput" placeholder="เช่น ชุดที่ 1, ชุดปรับปรุง 2569">
+            </div>
+            <div id="sectionWrap"></div>
+            <button class="btn s" id="addSectionBtn" type="button" style="margin-bottom:18px">+ เพิ่มส่วน</button>
+            <div class="muted" id="blueprintTotal" style="margin-bottom:14px;font-weight:600"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn p" id="saveBlueprintBtn" type="button">บันทึกโครงสร้างชุดนี้</button>
+              <button class="btn s" id="cancelEditBtn" type="button">ยกเลิก</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -175,7 +192,9 @@
     document.getElementById("importBtn").onclick = onBulkImport;
 
     document.getElementById("addSectionBtn").onclick = () => { addSectionRow(); updateBlueprintTotal(); };
-    document.getElementById("saveBlueprintBtn").onclick = onSaveBlueprint;
+    document.getElementById("saveBlueprintBtn").onclick = onSaveConfig;
+    document.getElementById("newConfigBtn").onclick = () => openEditor(null);
+    document.getElementById("cancelEditBtn").onclick = closeEditor;
 
     loadList();
   }
@@ -244,7 +263,10 @@
     renderMath(box);
   }
 
-  /* ── โครงสร้างชุดข้อสอบ (Blueprint) ── */
+  /* ── โครงสร้างชุดข้อสอบ (Blueprint) — วิชาหนึ่งมีได้หลายชุด เลือกได้ว่าชุดไหน active ── */
+  let blueprintConfigs = [];
+  let editingConfigName = undefined; // undefined = ยังไม่เปิดตัวแก้ไข, null = กำลังสร้างชุดใหม่, string = กำลังแก้ชุดที่มีชื่อนี้
+
   function addSectionRow(section){
     const wrap = document.getElementById("sectionWrap");
     const strands = currentStrands();
@@ -294,36 +316,125 @@
     });
   }
 
+  /** โหลดรายชื่อโครงสร้างชุดข้อสอบทั้งหมดของวิชาที่เลือกไว้ แล้วแสดงเป็นลิสต์ (ปิดตัวแก้ไขไว้ก่อน) */
   async function loadBlueprint(){
-    const subject = document.getElementById("subjectSel").value;
-    document.getElementById("sectionWrap").innerHTML = "";
     document.getElementById("blueprintMsg").innerHTML = "";
+    closeEditor();
+    const subject = document.getElementById("subjectSel").value;
+    const configList = document.getElementById("configList");
+    configList.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+
+    const res = await apiCall("adminListBlueprintConfigs", { adminPassword: adminPass(), subject });
+    if (!res.ok){
+      configList.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`;
+      return;
+    }
+    blueprintConfigs = res.configs || [];
+    renderConfigList();
+  }
+
+  function renderConfigList(){
+    const configList = document.getElementById("configList");
+    if (!blueprintConfigs.length){
+      configList.innerHTML = '<p class="muted">วิชานี้ยังไม่มีโครงสร้างชุดข้อสอบ กด "สร้างโครงสร้างใหม่" เพื่อเริ่มต้น</p>';
+      return;
+    }
+    configList.innerHTML = blueprintConfigs.map(c => {
+      const total = c.sections.reduce((s, x) => s + (x.count || 0), 0);
+      return `
+      <div class="cfgrow" data-name="${escHtml(c.name)}">
+        <div class="name">${escHtml(c.name)} ${c.active ? '<span class="active-tag">ใช้งานอยู่</span>' : ""}
+          <span class="muted" style="font-weight:400;font-size:13px">(${c.sections.length} ส่วน รวม ${total} ข้อ)</span>
+        </div>
+        <div class="btns">
+          ${c.active ? "" : `<button class="btn s useBtn" type="button">ใช้ชุดนี้</button>`}
+          <button class="btn s editBtn" type="button">แก้ไข</button>
+          <button class="del delBtn" type="button">ลบ</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    configList.querySelectorAll(".cfgrow").forEach(row => {
+      const name = row.dataset.name;
+      const useBtn = row.querySelector(".useBtn");
+      if (useBtn) useBtn.onclick = () => onSetActive(name);
+      row.querySelector(".editBtn").onclick = () => openEditor(name);
+      row.querySelector(".delBtn").onclick = () => onDeleteConfig(name);
+    });
+  }
+
+  function openEditor(name){
+    editingConfigName = name; // null = สร้างชุดใหม่, string = แก้ชุดที่มีอยู่
+    document.getElementById("sectionWrap").innerHTML = "";
     bankCountByStrand = {};
 
-    const res = await apiCall("blueprint", { subject });
-    const sections = (res.ok && res.sections) || [];
+    const cfg = name ? blueprintConfigs.find(c => c.name === name) : null;
+    document.getElementById("configNameInput").value = cfg ? cfg.name : "";
+    const sections = cfg ? cfg.sections : [];
     if (!sections.length) addSectionRow();
     else sections.forEach(s => addSectionRow(s));
 
-    await updateSectionHints();
+    updateSectionHints();
     updateBlueprintTotal();
+    document.getElementById("configEditor").classList.remove("hidden");
+    document.getElementById("configEditor").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
-  async function onSaveBlueprint(){
+  function closeEditor(){
+    editingConfigName = undefined;
+    document.getElementById("configEditor").classList.add("hidden");
+  }
+
+  async function onSaveConfig(){
     const subject = document.getElementById("subjectSel").value;
+    const configName = document.getElementById("configNameInput").value.trim() || "ค่าเริ่มต้น";
     const rows = [...document.querySelectorAll("#sectionWrap .secrow")];
     const sections = rows.map(row => ({
       strand: row.querySelector(".secStrand").value,
       count: parseInt(row.querySelector(".secCount").value, 10) || 0
     })).filter(s => s.count > 0);
 
+    if (!sections.length){
+      document.getElementById("blueprintMsg").innerHTML = '<div class="msg bad">กรุณาใส่จำนวนข้ออย่างน้อย 1 ส่วน</div>';
+      return;
+    }
+
     const btn = document.getElementById("saveBlueprintBtn");
     btn.disabled = true; btn.textContent = "กำลังบันทึก…";
-    const res = await apiCall("adminSaveBlueprint", { adminPassword: adminPass(), subject, sections });
+
+    const res = await apiCall("adminSaveBlueprintConfig", { adminPassword: adminPass(), subject, configName, sections });
+
+    // ถ้าเปลี่ยนชื่อชุดที่แก้ไขอยู่ ให้ลบชุดชื่อเดิมทิ้ง (ย้ายเนื้อหาไปชื่อใหม่แล้ว)
+    if (res.ok && editingConfigName && editingConfigName !== configName){
+      await apiCall("adminDeleteBlueprintConfig", { adminPassword: adminPass(), subject, configName: editingConfigName });
+    }
+
+    btn.disabled = false; btn.textContent = "บันทึกโครงสร้างชุดนี้";
     document.getElementById("blueprintMsg").innerHTML = res.ok
-      ? '<div class="msg ok">บันทึกโครงสร้างชุดข้อสอบเรียบร้อยแล้ว</div>'
+      ? '<div class="msg ok">บันทึกโครงสร้างชุดข้อสอบเรียบร้อยแล้ว จะอยู่ถาวรจนกว่าจะแก้ไขหรือลบ</div>'
       : `<div class="msg bad">${escHtml(res.error || "บันทึกไม่สำเร็จ")}</div>`;
-    btn.disabled = false; btn.textContent = "บันทึกโครงสร้างชุดข้อสอบ";
+
+    if (res.ok) loadBlueprint();
+  }
+
+  async function onSetActive(name){
+    const subject = document.getElementById("subjectSel").value;
+    const res = await apiCall("adminSetActiveBlueprintConfig", { adminPassword: adminPass(), subject, configName: name });
+    document.getElementById("blueprintMsg").innerHTML = res.ok
+      ? `<div class="msg ok">เปลี่ยนไปใช้โครงสร้าง "${escHtml(name)}" แล้ว</div>`
+      : `<div class="msg bad">${escHtml(res.error || "ตั้งค่าไม่สำเร็จ")}</div>`;
+    if (res.ok) loadBlueprint();
+  }
+
+  async function onDeleteConfig(name){
+    if (!confirm(`ลบโครงสร้างชุด "${name}" ทิ้ง?`)) return;
+    const subject = document.getElementById("subjectSel").value;
+    const res = await apiCall("adminDeleteBlueprintConfig", { adminPassword: adminPass(), subject, configName: name });
+    if (!res.ok){
+      document.getElementById("blueprintMsg").innerHTML = `<div class="msg bad">${escHtml(res.error || "ลบไม่สำเร็จ")}</div>`;
+      return;
+    }
+    loadBlueprint();
   }
 
   /* ── นำเข้าข้อสอบหลายข้อจาก JSON ── */

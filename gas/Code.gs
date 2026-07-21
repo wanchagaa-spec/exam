@@ -22,8 +22,9 @@
  *   Contact    : timestamp | name | email | message
  *   Feedback   : timestamp | name | text
  *   Results    : timestamp | subject | username | name | score | total | percent | passed | usedSeconds | auto
- *   Blueprint  : subject | order | strand | count
- *               ── "โครงสร้างชุดข้อสอบ" ของแต่ละวิชา กำหนดว่าส่วนที่เท่าไร สุ่มกี่ข้อจากสาระไหน
+ *   Blueprint  : subject | configName | active | order | strand | count
+ *               ── "โครงสร้างชุดข้อสอบ" ของแต่ละวิชา แต่ละวิชามีได้หลายชุด (configName ตั้งชื่อเอง)
+ *                  ชุดที่ active = TRUE คือชุดที่ระบบใช้สุ่มข้อสอบจริงตอนนักเรียนทำข้อสอบ (มีได้ทีละ 1 ชุดต่อวิชา)
  *                  จัดการผ่านหน้า admin.html ได้เลย ไม่ต้องพิมพ์ในชีตเอง (ระบบสร้าง/แก้ให้อัตโนมัติ)
  *   Q_<slug>   : id | type | text | options | answer | score | note | strand
  *               ── หนึ่งชีตต่อหนึ่งวิชา ชื่อชีตต้องขึ้นต้นด้วย Q_ แล้วตามด้วย slug ของวิชา
@@ -97,7 +98,10 @@ function doPost(e) {
         case 'adminListQuestions':   return json(adminListQuestions(body));
         case 'adminAddQuestion':     return json(adminAddQuestion(body));
         case 'adminDeleteQuestion':  return json(adminDeleteQuestion(body));
-        case 'adminSaveBlueprint':   return json(adminSaveBlueprint(body));
+        case 'adminListBlueprintConfigs':  return json(adminListBlueprintConfigs(body));
+        case 'adminSaveBlueprintConfig':   return json(adminSaveBlueprintConfig(body));
+        case 'adminDeleteBlueprintConfig': return json(adminDeleteBlueprintConfig(body));
+        case 'adminSetActiveBlueprintConfig': return json(adminSetActiveBlueprintConfig(body));
         default:                     return json({ ok: false, error: 'unknown action' });
       }
     } finally {
@@ -195,41 +199,161 @@ function readBank_(subject) {
   return out;
 }
 
-/** โครงสร้างชุดข้อสอบ (Blueprint sheet: subject | order | strand | count) เรียงตาม order */
+/**
+ * เปิดชีต Blueprint (สร้างใหม่ถ้ายังไม่มี) — ถ้าเจอโครงสร้างเก่าแบบ 4 คอลัมน์
+ * (subject|order|strand|count จากเวอร์ชันก่อนที่จะรองรับหลายชุด) จะแปลงเป็น
+ * โครงสร้างใหม่ 6 คอลัมน์อัตโนมัติ โดยตั้งเป็นชุด "ค่าเริ่มต้น" และ active ทันที
+ */
+function blueprintSheet_() {
+  const ss = ss_();
+  let sh = ss.getSheetByName('Blueprint');
+  if (!sh) {
+    sh = ss.insertSheet('Blueprint');
+    sh.appendRow(['subject', 'configName', 'active', 'order', 'strand', 'count']);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, 6).setFontWeight('bold').setBackground('#26123f').setFontColor('#FFFFFF');
+    return sh;
+  }
+  if (sh.getLastColumn() > 0 && sh.getLastColumn() <= 4) {
+    const rows = sh.getDataRange().getValues();
+    const migrated = [['subject', 'configName', 'active', 'order', 'strand', 'count']];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r[0]) continue;
+      migrated.push([r[0], 'ค่าเริ่มต้น', true, r[1], r[2], r[3]]);
+    }
+    sh.clearContents();
+    sh.getRange(1, 1, migrated.length, 6).setValues(migrated);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** ส่วนต่าง ๆ ของ "ชุดที่ active อยู่" ของวิชานั้น (ใช้ตอนสุ่มข้อสอบจริง และแสดงตัวอย่างหน้าเว็บ) เรียงตาม order */
 function getBlueprint_(subject) {
   subject = String(subject || '').slice(0, 50);
   const sh = ss_().getSheetByName('Blueprint');
   if (!sh) return [];
   const rows = sh.getDataRange().getValues();
+  if (sh.getLastColumn() <= 4) return []; // ยังไม่แปลงโครงสร้าง (ยังไม่เคยเรียก blueprintSheet_ เลย) — ไม่มีชุด active ให้ใช้
   const out = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (String(r[0]) !== subject) continue;
-    out.push({ order: Number(r[1]) || 0, strand: String(r[2] || ''), count: Number(r[3]) || 0 });
+    if (String(r[0]) !== subject || !r[2]) continue; // ต้องเป็นชุดที่ active
+    out.push({ order: Number(r[3]) || 0, strand: String(r[4] || ''), count: Number(r[5]) || 0 });
   }
   out.sort((a, b) => a.order - b.order);
   return out;
 }
 
-function adminSaveBlueprint(body) {
+/** รายชื่อโครงสร้างชุดข้อสอบทั้งหมดของวิชาหนึ่ง (พร้อมส่วนของแต่ละชุด และชุดไหน active อยู่) */
+function adminListBlueprintConfigs(body) {
   if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
   const subject = String(body.subject || '').slice(0, 50);
+  const sh = blueprintSheet_();
+  const rows = sh.getDataRange().getValues();
+  const byName = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[0]) !== subject) continue;
+    const name = String(r[1] || 'ค่าเริ่มต้น');
+    if (!byName[name]) byName[name] = { name: name, active: false, sections: [] };
+    if (r[2]) byName[name].active = true;
+    byName[name].sections.push({ order: Number(r[3]) || 0, strand: String(r[4] || ''), count: Number(r[5]) || 0 });
+  }
+  const configs = Object.keys(byName).map(k => byName[k]);
+  configs.forEach(c => c.sections.sort((a, b) => a.order - b.order));
+  configs.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+  return { ok: true, configs: configs };
+}
+
+/** สร้างชุดใหม่ หรือแก้ไขชุดที่มีชื่อนี้อยู่แล้วของวิชานี้ (แทนที่ทุกส่วนของชุดนั้นทั้งหมด) */
+function adminSaveBlueprintConfig(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const configName = clean(String(body.configName || '').trim()) || 'ค่าเริ่มต้น';
   const sections = Array.isArray(body.sections) ? body.sections : [];
   if (!subject) return { ok: false, error: 'ไม่ได้ระบุวิชา' };
+  if (!sections.length) return { ok: false, error: 'ยังไม่ได้กำหนดส่วนใด ๆ ในโครงสร้าง' };
 
-  const sh = sheet_('Blueprint', ['subject', 'order', 'strand', 'count']);
+  const sh = blueprintSheet_();
   const rows = sh.getDataRange().getValues();
-  const keep = [rows[0]]; // หัวตาราง
+  const keep = [rows[0]];
+  let hadAnyForSubject = false;
+  let wasActive = false;
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) !== subject) keep.push(rows[i]);
+    const r = rows[i];
+    if (String(r[0]) === subject) {
+      hadAnyForSubject = true;
+      if (String(r[1] || 'ค่าเริ่มต้น') === configName) {
+        if (r[2]) wasActive = true;
+        continue; // แทนที่ทุกแถวของชุดนี้ด้วยข้อมูลใหม่ด้านล่าง
+      }
+    }
+    keep.push(r);
   }
+  const active = wasActive || !hadAnyForSubject; // ชุดแรกของวิชาจะ active ให้อัตโนมัติ
   sections.forEach((s, i) => {
-    keep.push([subject, i, clean(s.strand), Number(s.count) || 0]);
+    keep.push([subject, configName, active, i, clean(s.strand), Number(s.count) || 0]);
   });
 
   sh.clearContents();
-  if (keep.length) sh.getRange(1, 1, keep.length, 4).setValues(keep);
+  sh.getRange(1, 1, keep.length, 6).setValues(keep);
   sh.setFrozenRows(1);
+
+  return { ok: true, active: active };
+}
+
+/** ลบโครงสร้างชุดหนึ่งทิ้ง ถ้าชุดที่ลบเป็นชุด active อยู่ จะตั้งชุดแรกที่เหลือของวิชานี้เป็น active แทนอัตโนมัติ */
+function adminDeleteBlueprintConfig(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const configName = String(body.configName || '').trim();
+  if (!subject || !configName) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+
+  const sh = blueprintSheet_();
+  const rows = sh.getDataRange().getValues();
+  const keep = [rows[0]];
+  let wasActive = false;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[0]) === subject && String(r[1] || 'ค่าเริ่มต้น') === configName) {
+      if (r[2]) wasActive = true;
+      continue;
+    }
+    keep.push(r);
+  }
+  if (wasActive) {
+    for (let i = 1; i < keep.length; i++) {
+      if (String(keep[i][0]) === subject) { keep[i] = keep[i].slice(); keep[i][2] = true; break; }
+    }
+  }
+
+  sh.clearContents();
+  sh.getRange(1, 1, keep.length, 6).setValues(keep);
+  sh.setFrozenRows(1);
+
+  return { ok: true };
+}
+
+/** ตั้งชุดที่ระบุเป็นชุด active ของวิชานี้ (ปิด active ของชุดอื่นในวิชาเดียวกันทั้งหมด) */
+function adminSetActiveBlueprintConfig(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const configName = String(body.configName || '').trim();
+  if (!subject || !configName) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+
+  const sh = blueprintSheet_();
+  const rows = sh.getDataRange().getValues();
+  let found = false;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== subject) continue;
+    const isThis = String(rows[i][1] || 'ค่าเริ่มต้น') === configName;
+    if (isThis) found = true;
+    rows[i][2] = isThis;
+  }
+  if (!found) return { ok: false, error: 'ไม่พบโครงสร้างชุดนี้' };
+  sh.getRange(1, 1, rows.length, 6).setValues(rows);
 
   return { ok: true };
 }

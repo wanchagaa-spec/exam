@@ -162,12 +162,18 @@ function demoBankLoad(subject){
 }
 function demoBankSave(subject, list){ localStorage.setItem(demoBankKey(subject), JSON.stringify(list)); }
 
-/* โหมดตัวอย่าง: โครงสร้างชุดข้อสอบ (ส่วนที่ 1, 2, ... ดึงกี่ข้อจากสาระไหน) ต่อวิชา เก็บใน localStorage */
+/* โหมดตัวอย่าง: โครงสร้างชุดข้อสอบต่อวิชา เก็บเป็นลิสต์ของ "หลายชุด" ใน localStorage
+   แต่ละชุด { name, active, sections:[{strand,count}] } — มีได้หลายชุดต่อวิชา แต่ active ได้ทีละชุด */
 function demoBlueprintKey(subject){ return "examSiteDemoBlueprint_" + subject; }
-function demoBlueprintLoad(subject){
+function demoBlueprintConfigsLoad(subject){
   try { return JSON.parse(localStorage.getItem(demoBlueprintKey(subject)) || "[]"); } catch(e){ return []; }
 }
-function demoBlueprintSave(subject, sections){ localStorage.setItem(demoBlueprintKey(subject), JSON.stringify(sections)); }
+function demoBlueprintConfigsSave(subject, configs){ localStorage.setItem(demoBlueprintKey(subject), JSON.stringify(configs)); }
+/* ส่วนของชุดที่ active อยู่ของวิชานี้ (ใช้ตอนจำลองการสุ่มข้อสอบจริง) */
+function demoBlueprintLoad(subject){
+  const active = demoBlueprintConfigsLoad(subject).find(c => c.active);
+  return (active && active.sections) || [];
+}
 
 /* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
 async function blueprintSummary(subject){
@@ -249,9 +255,42 @@ async function demoApi(action, payload){
     return { ok:true, sections: demoBlueprintLoad(payload.subject) };
   }
 
-  if (action === "adminSaveBlueprint"){
+  if (action === "adminListBlueprintConfigs"){
     if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
-    demoBlueprintSave(payload.subject, payload.sections || []);
+    return { ok:true, configs: demoBlueprintConfigsLoad(payload.subject) };
+  }
+
+  if (action === "adminSaveBlueprintConfig"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const sections = payload.sections || [];
+    if (!sections.length) return { ok:false, error:"ยังไม่ได้กำหนดส่วนใด ๆ ในโครงสร้าง" };
+    const name = (payload.configName || "").trim() || "ค่าเริ่มต้น";
+    const configs = demoBlueprintConfigsLoad(payload.subject);
+    const idx = configs.findIndex(c => c.name === name);
+    const active = idx >= 0 ? configs[idx].active : configs.length === 0;
+    const cfg = { name, active, sections };
+    if (idx >= 0) configs[idx] = cfg; else configs.push(cfg);
+    demoBlueprintConfigsSave(payload.subject, configs);
+    return { ok:true, active };
+  }
+
+  if (action === "adminDeleteBlueprintConfig"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    let configs = demoBlueprintConfigsLoad(payload.subject);
+    const wasActive = configs.some(c => c.name === payload.configName && c.active);
+    configs = configs.filter(c => c.name !== payload.configName);
+    if (wasActive && configs.length) configs[0].active = true;
+    demoBlueprintConfigsSave(payload.subject, configs);
+    return { ok:true };
+  }
+
+  if (action === "adminSetActiveBlueprintConfig"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const configs = demoBlueprintConfigsLoad(payload.subject);
+    let found = false;
+    configs.forEach(c => { c.active = (c.name === payload.configName); if (c.active) found = true; });
+    if (!found) return { ok:false, error:"ไม่พบโครงสร้างชุดนี้" };
+    demoBlueprintConfigsSave(payload.subject, configs);
     return { ok:true };
   }
 
