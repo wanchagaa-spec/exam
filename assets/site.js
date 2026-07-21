@@ -26,7 +26,7 @@ window.APP = {
 const NAV = [
   { href:"index.html",     label:"หน้าแรก" },
   { href:"subjects.html",  label:"รายวิชา / ทำข้อสอบ" },
-  { href:"news.html",      label:"ข่าวสาร / กิจกรรม" },
+  { href:"news.html",      label:"บอร์ดความคิดเห็น" },
   { href:"downloads.html", label:"ดาวน์โหลดเอกสาร" },
   { href:"contact.html",   label:"ติดต่อเรา" }
 ];
@@ -55,7 +55,7 @@ function renderHeader(active){
 
   const rightHtml = user ? `
       <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
-      <a class="navicon ${on("news.html")}" href="news.html" title="ข่าวสาร" aria-label="ข่าวสาร">📰</a>
+      <a class="navicon ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
       <button class="navicon" id="bellBtn" type="button" title="แจ้งเตือน" aria-label="แจ้งเตือน">
         🔔<span class="badge hidden" id="notifBadge">0</span>
       </button>
@@ -75,7 +75,7 @@ function renderHeader(active){
       <div class="notifpanel hidden" id="notifPanel"><p class="muted" style="padding:14px;font-size:14px">กำลังโหลด…</p></div>
     ` : `
       <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
-      <a class="navicon ${on("news.html")}" href="news.html" title="ข่าวสาร" aria-label="ข่าวสาร">📰</a>
+      <a class="navicon ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
       <a href="login.html" style="display:inline-flex;align-items:center;min-height:40px;padding:0 18px;border-radius:999px;background:#fff;color:var(--accent-ink);font-weight:700;font-size:14.5px">เข้าสู่ระบบ</a>
     `;
 
@@ -175,7 +175,7 @@ function renderHeader(active){
     }
   })();
 
-  /* ── ปุ่ม + เปิดหน้าต่างโพสต์ทันที (ใช้ได้ทุกหน้า ไม่ต้องเปลี่ยนหน้าไปที่ข่าวสาร) ── */
+  /* ── ปุ่ม + เปิดหน้าต่างโพสต์ทันที (ใช้ได้ทุกหน้า ไม่ต้องเปลี่ยนหน้าไปที่บอร์ดความคิดเห็นก่อน) ── */
   const composeBtn = document.getElementById("composeBtn");
   const composeMask = document.getElementById("composeMask");
   const composeSubject = document.getElementById("composeSubject");

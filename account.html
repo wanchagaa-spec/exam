@@ -54,23 +54,8 @@
       </div>
       <div id="avatarMsg"></div>
 
-      <div class="card" style="margin-bottom:26px">
-        <h3 style="margin-bottom:14px">โพสต์อะไรบางอย่าง</h3>
-        <form id="postForm">
-          <div class="field">
-            <label for="pSubject">หมวดหมู่ (วิชา)</label>
-            <select id="pSubject" required></select>
-          </div>
-          <div class="field">
-            <label for="pText">ข้อความ <span class="req">*</span></label>
-            <textarea id="pText" placeholder="เขียนอะไรบางอย่าง…" required maxlength="1000"></textarea>
-          </div>
-          <button class="btn p block" type="submit">โพสต์</button>
-        </form>
-      </div>
-
       <h2 style="font-size:20px;margin-bottom:14px">โพสต์ของฉัน</h2>
-      <div id="postMsg"></div>
+      <p class="muted" style="margin-bottom:16px;font-size:14px">โพสต์ใหม่ได้จากปุ่ม + บน header</p>
       <div id="list"></div>
     </div>
   </section>
@@ -119,8 +104,6 @@
     e.target.value = "";
   };
 
-  const subjectSel = document.getElementById("pSubject");
-  subjectSel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
   function subjectMeta(slug){ return SUBJECTS.find(s => s.slug === slug); }
   function fmtTime(iso){
     try { return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }); }
@@ -249,28 +232,6 @@
     const res = await apiCall("deletePost", { postId: id, email: user.email });
     if (res.ok) loadMyPosts();
   }
-
-  document.getElementById("postForm").onsubmit = async (e) => {
-    e.preventDefault();
-    const subject = subjectSel.value;
-    const text = document.getElementById("pText").value.trim();
-    if (!subject || !text) return;
-
-    const btn = e.target.querySelector("button");
-    btn.disabled = true; btn.textContent = "กำลังโพสต์…";
-
-    const res = await apiCall("createPost", { email: user.email, name: user.name, subject, text });
-
-    if (res.ok){
-      document.getElementById("postMsg").innerHTML = '<div class="msg ok">โพสต์เรียบร้อยแล้ว</div>';
-      e.target.reset();
-      subjectSel.value = subject;
-      loadMyPosts();
-    } else {
-      document.getElementById("postMsg").innerHTML = `<div class="msg bad">${escHtml(res.error || "โพสต์ไม่สำเร็จ")}</div>`;
-    }
-    btn.disabled = false; btn.textContent = "โพสต์";
-  };
 
   loadMyPosts();
   document.addEventListener("examSitePostCreated", loadMyPosts);
