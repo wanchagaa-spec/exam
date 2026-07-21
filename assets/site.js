@@ -381,6 +381,144 @@ async function blueprintSummary(subject){
   return { sections, total: sections.reduce((s,x) => s + (x.count||0), 0) };
 }
 
+/* ── การ์ดโพสต์บอร์ดความคิดเห็น (ใช้ร่วมกัน 3 หน้า: news.html, account.html, search.html)
+   ต้องมี CSS .post/.comment/.actbtn/.comments/.commentForm ใน assets/style.css แล้ว ── */
+function postSubjectMeta(slug){
+  return (typeof SUBJECTS !== "undefined" ? SUBJECTS : []).find(s => s.slug === slug);
+}
+function postFmtTime(iso){
+  try { return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }); }
+  catch(e){ return ""; }
+}
+function postCardHtml(p, viewerEmail){
+  const meta = postSubjectMeta(p.subject);
+  const mine = p.email === viewerEmail;
+  return `
+  <div class="post" data-id="${escHtml(p.id)}">
+    <div class="head">
+      <div>
+        <div class="who">${escHtml(p.name)}</div>
+        ${meta ? `<span class="tag" style="margin-top:6px">${meta.icon} ${escHtml(meta.name)}</span>` : ""}
+      </div>
+      <span class="when">${postFmtTime(p.timestamp)}</span>
+    </div>
+    <div class="body">${escHtml(p.text)}</div>
+    <div class="actions">
+      <button class="actbtn likeBtn ${p.likedByMe ? "liked" : ""}" type="button">${p.likedByMe ? "❤️" : "🤍"} ถูกใจ (${p.likeCount})</button>
+      <button class="actbtn cmtToggle" type="button">💬 ความคิดเห็น (${p.commentCount})</button>
+      ${mine ? '<button class="actbtn delbtn delPostBtn" type="button">ลบโพสต์</button>' : ""}
+    </div>
+    <div class="comments hidden">
+      <div class="commentList"></div>
+      <form class="commentForm">
+        <input type="text" placeholder="เขียนความคิดเห็น…" maxlength="500" required>
+        <button class="btn s" type="submit">ส่ง</button>
+      </form>
+    </div>
+  </div>`;
+}
+
+/**
+ * สร้างตัวจัดการฟีดโพสต์ (แสดง + ถูกใจ + คอมเมนต์ + ลบ) ใช้ร่วมกันได้ทุกหน้าที่มีฟีดโพสต์
+ * options: { listEl, user, emptyMessage, onChange }
+ *   listEl        องค์ประกอบ <div> ที่จะใส่การ์ดโพสต์
+ *   user          ผู้ใช้ที่ล็อกอินอยู่ { email, name }
+ *   emptyMessage  ข้อความตอนไม่มีโพสต์เลย
+ *   onChange      เรียกหลังลบโพสต์สำเร็จ (ไว้โหลดฟีดใหม่ตามเงื่อนไขของแต่ละหน้า)
+ * คืนค่า { render(posts) } ให้แต่ละหน้าเรียกหลังโหลดข้อมูลจาก apiCall("listPosts", ...) เอง
+ */
+function createPostBoard(options){
+  const { listEl, user, emptyMessage, onChange } = options;
+  const expanded = new Set();
+  const commentsCache = {};
+
+  function render(posts){
+    if (!posts.length){
+      listEl.innerHTML = `<p class="muted">${emptyMessage}</p>`;
+      return;
+    }
+    listEl.innerHTML = posts.map(p => postCardHtml(p, user.email)).join("");
+    listEl.querySelectorAll(".post").forEach(card => {
+      const id = card.dataset.id;
+      card.querySelector(".likeBtn").onclick = () => onToggleLike(id, card);
+      card.querySelector(".cmtToggle").onclick = () => onToggleComments(id, card);
+      const delBtn = card.querySelector(".delPostBtn");
+      if (delBtn) delBtn.onclick = () => onDeletePost(id);
+      card.querySelector(".commentForm").onsubmit = (e) => onAddComment(e, id, card);
+      if (expanded.has(id)) renderComments(id, card);
+    });
+  }
+
+  async function onToggleLike(id, card){
+    const btn = card.querySelector(".likeBtn");
+    btn.disabled = true;
+    const res = await apiCall("toggleLike", { postId: id, email: user.email, name: user.name });
+    btn.disabled = false;
+    if (!res.ok) return;
+    btn.classList.toggle("liked", res.liked);
+    btn.textContent = `${res.liked ? "❤️" : "🤍"} ถูกใจ (${res.likeCount})`;
+  }
+
+  function onToggleComments(id, card){
+    const box = card.querySelector(".comments");
+    const nowOpen = box.classList.contains("hidden");
+    box.classList.toggle("hidden");
+    if (nowOpen){ expanded.add(id); renderComments(id, card); }
+    else expanded.delete(id);
+  }
+
+  async function renderComments(id, card){
+    const box = card.querySelector(".commentList");
+    box.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังโหลด…</p>';
+    const res = await apiCall("listComments", { postId: id });
+    commentsCache[id] = (res.ok && res.comments) || [];
+    const comments = commentsCache[id];
+    box.innerHTML = comments.length
+      ? comments.map(c => `
+        <div class="comment" data-id="${escHtml(c.id)}">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span class="who">${escHtml(c.name)}</span>
+            <span class="when">${postFmtTime(c.timestamp)}</span>
+          </div>
+          <div class="txt">${escHtml(c.text)}</div>
+          ${c.email === user.email ? '<button class="delc" type="button">ลบความคิดเห็น</button>' : ""}
+        </div>`).join("")
+      : '<p class="muted" style="font-size:13.5px">ยังไม่มีความคิดเห็น</p>';
+
+    box.querySelectorAll(".delc").forEach(btn => {
+      btn.onclick = async () => {
+        const commentId = btn.closest(".comment").dataset.id;
+        const res2 = await apiCall("deleteComment", { commentId, email: user.email });
+        if (res2.ok) renderComments(id, card);
+      };
+    });
+  }
+
+  async function onAddComment(e, id, card){
+    e.preventDefault();
+    const input = card.querySelector(".commentForm input");
+    const text = input.value.trim();
+    if (!text) return;
+    const btn = card.querySelector(".commentForm button");
+    btn.disabled = true;
+    const res = await apiCall("addComment", { postId: id, email: user.email, name: user.name, text });
+    btn.disabled = false;
+    if (!res.ok) return;
+    input.value = "";
+    renderComments(id, card);
+    const cmtBtn = card.querySelector(".cmtToggle");
+    cmtBtn.textContent = `💬 ความคิดเห็น (${(commentsCache[id] || []).length})`;
+  }
+
+  async function onDeletePost(id){
+    if (!confirm("ลบโพสต์นี้ทิ้ง?")) return;
+    const res = await apiCall("deletePost", { postId: id, email: user.email });
+    if (res.ok && onChange) onChange();
+  }
+
+  return { render };
+}
+
 async function apiCall(action, payload){
   if (APP.demoMode){
     return demoApi(action, payload);

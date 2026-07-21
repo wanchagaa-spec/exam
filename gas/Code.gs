@@ -89,7 +89,7 @@ function doGet(e) {
 /* action ที่แค่อ่านข้อมูล ไม่แก้ไขอะไร — ข้ามการล็อกได้ ไม่ต้องรอคิวหลังไมค์การเขียนของคนอื่น
    (ช่วยให้การโหลดบอร์ด/รายการต่าง ๆ เร็วขึ้น โดยเฉพาะเวลามีคนใช้งานพร้อมกันหลายคน) */
 const READ_ONLY_ACTIONS = new Set([
-  'login', 'listPosts', 'listComments', 'listNotifications',
+  'login', 'blueprint', 'listPosts', 'listComments', 'listNotifications',
   'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs'
 ]);
 
@@ -119,6 +119,7 @@ function routeAction_(body) {
   switch (body.action) {
     case 'register':            return register(body);
     case 'login':                return login(body);
+    case 'blueprint':            return { ok: true, sections: getBlueprint_(body.subject) };
     case 'updateAvatar':         return updateAvatar(body);
     case 'contact':              return contact(body);
     case 'submitExam':           return submitExam(body);
