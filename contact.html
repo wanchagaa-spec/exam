@@ -50,7 +50,7 @@
           <div class="card" style="margin-bottom:16px">
             <h3 style="margin-bottom:14px">ช่องทางอื่น</h3>
             <p style="margin-bottom:10px">👤 ผู้ประสานงาน: <b id="cName2"></b></p>
-            <p style="margin-bottom:10px">📞 โทร: <a id="cPhone"></a></p>
+            <p id="cPhoneRow" style="margin-bottom:10px">📞 โทร: <a id="cPhone"></a></p>
             <p style="margin-bottom:10px">📘 <a id="cFb" target="_blank" rel="noopener">Facebook Page</a></p>
           </div>
           <div class="card">
@@ -69,8 +69,12 @@
   renderFooter();
 
   document.getElementById("cName2").textContent = APP.contactName;
-  document.getElementById("cPhone").textContent = APP.contactPhone;
-  document.getElementById("cPhone").href = "tel:" + APP.contactPhone.replace(/-/g,"");
+  if (APP.contactPhone){
+    document.getElementById("cPhone").textContent = APP.contactPhone;
+    document.getElementById("cPhone").href = "tel:" + APP.contactPhone.replace(/-/g,"");
+  } else {
+    document.getElementById("cPhoneRow").classList.add("hidden");
+  }
   document.getElementById("cFb").href = APP.facebook;
   document.getElementById("cFb").textContent = "Facebook Page";
 

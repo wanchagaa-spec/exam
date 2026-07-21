@@ -8,13 +8,14 @@ window.APP = {
   /* โหมดตัวอย่าง — true = ทุกอย่าง (สมัคร/ล็อกอิน/ส่งข้อสอบ/ฟอร์มติดต่อ) จำลองในเครื่อง
      ไม่มีข้อมูลส่งออกไปไหนจริง ให้ลูกค้าทดลองเว็บได้ก่อนเชื่อมหลังบ้านจริง
      ⚠ ก่อนใช้งานจริง ให้เปลี่ยนเป็น false และตั้ง endpoint + token ให้ตรงกับ gas/Code.gs */
-  demoMode: true,
+  demoMode: false,
   endpoint: "https://script.google.com/macros/s/AKfycbzajb2FuPJeuIsrpEGOqkjT-Q5b7ptfiJNgcxzpZZhYy0AiLTOQjGo5RF2uKCcEsywa/exec",                            // URL ของ Apps Script Web app (ดู gas/Code.gs)
   token:    "ai75jg8f3d9g7k3",      // ต้องตรงกับ TOKEN ใน gas/Code.gs
 
   facebook: "https://www.facebook.com/",   // ★ ใส่ลิงก์ Facebook Page จริง
   contactEmail: "wanchagaa.fe@gmail.com",     // ★ อีเมลปลายทางฟอร์มติดต่อ (ตั้งใน Code.gs)
-  contactName:  "วันชัย วรรณวงค์"
+  contactName:  "วันชัย วรรณวงค์",
+  contactPhone: "",                        // ★ ใส่เบอร์โทรจริงถ้าต้องการแสดง (เว้นว่างได้ ไม่แสดงลิงก์โทร)
 
   /* รหัสผ่านแอดมิน ใช้เฉพาะตอน demoMode = true เพื่อทดลองหน้า admin.html ในเครื่อง
      ตอนใช้งานจริง หน้าเว็บจะส่งรหัสที่พิมพ์ไปให้ ADMIN_PASSWORD ใน gas/Code.gs ตรวจแทน ไม่เกี่ยวกับค่านี้ */
@@ -82,7 +83,7 @@ function renderFooter(){
           <h4>ติดต่อ</h4>
           <a href="contact.html">ฟอร์มติดต่อเรา</a>
           <a href="${APP.facebook}" target="_blank" rel="noopener">Facebook Page</a>
-          <a href="tel:${APP.contactPhone.replace(/-/g,"")}">${escHtml(APP.contactPhone)}</a>
+          ${APP.contactPhone ? `<a href="tel:${APP.contactPhone.replace(/-/g,"")}">${escHtml(APP.contactPhone)}</a>` : ""}
         </div>
       </div>
       <div class="foot-bottom">
@@ -179,12 +180,16 @@ async function apiCall(action, payload){
   if (APP.demoMode){
     return demoApi(action, payload);
   }
-  const r = await fetch(APP.endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(Object.assign({ token: APP.token, action }, payload))
-  });
-  return r.json();
+  try {
+    const r = await fetch(APP.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(Object.assign({ token: APP.token, action }, payload))
+    });
+    return await r.json();
+  } catch (err) {
+    return { ok:false, error:"เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตหรือ endpoint แล้วลองใหม่" };
+  }
 }
 
 /* ── หลังบ้านจำลองสำหรับโหมดตัวอย่างเท่านั้น ─────────────────── */
