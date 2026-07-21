@@ -10,6 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
   .qrow{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:12px}
   .qrow .top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
@@ -23,6 +26,12 @@
   .del{background:none;border:none;color:var(--danger);font-weight:700;cursor:pointer;font-size:14px;white-space:nowrap}
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:20px}
   .toolbar .field{margin-bottom:0;min-width:220px}
+  .pv-eyebrow{font-size:12.5px;font-weight:700;color:var(--muted2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+  .pv-q{font-weight:600;line-height:1.6;margin-bottom:12px;min-height:1.6em}
+  .pv-opt{padding:9px 13px;border:1.5px solid var(--line);border-radius:var(--r);margin-bottom:7px;font-size:15px}
+  .pv-opt.correct{border-color:var(--ok);background:rgba(74,222,128,.1);font-weight:700}
+  .pv-note{font-size:14px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+  .pv-empty{color:var(--muted2);font-size:14.5px}
 </style>
 </head>
 <body>
@@ -75,11 +84,13 @@
                 <select id="qType">
                   <option value="mc">ปรนัย (เลือกตอบ)</option>
                   <option value="tf">ถูก / ผิด</option>
+                  <option value="fill">เติมคำตอบ (พิมพ์เอง)</option>
                 </select>
               </div>
               <div class="field">
                 <label for="qText">โจทย์ <span class="req">*</span></label>
                 <textarea id="qText" required placeholder="พิมพ์โจทย์ข้อสอบ"></textarea>
+                <p class="help">พิมพ์สมการคณิตศาสตร์ได้ด้วยการคร่อมด้วย $ เช่น $x^2+1$ หรือ $\frac{1}{2}$ ระบบจะแสดงเป็นสมการสวยงามให้อัตโนมัติ (ใช้ได้ทั้งในช่องโจทย์ ตัวเลือก และคำอธิบายเฉลย)</p>
               </div>
 
               <div class="field" id="mcBlock">
@@ -92,6 +103,12 @@
                 <label>คำตอบที่ถูกต้อง <span class="req">*</span></label>
                 <div class="optrow"><input type="radio" name="tfAns" value="ถูก" id="tfTrue"><label for="tfTrue">ถูก</label></div>
                 <div class="optrow"><input type="radio" name="tfAns" value="ผิด" id="tfFalse"><label for="tfFalse">ผิด</label></div>
+              </div>
+
+              <div class="field hidden" id="fillBlock">
+                <label for="fillAnswers">คำตอบที่ยอมรับ <span class="req">*</span></label>
+                <textarea id="fillAnswers" placeholder="พิมพ์คำตอบที่ยอมรับได้ทุกแบบ ขึ้นบรรทัดใหม่หรือคั่นด้วย , ต่อ 1 คำตอบ&#10;เช่น&#10;10&#10;๑๐&#10;สิบ"></textarea>
+                <p class="help">ระบบจะตรวจว่าถูกถ้านักเรียนพิมพ์ตรงกับคำตอบแบบใดแบบหนึ่งในนี้ (ไม่สนตัวพิมพ์เล็ก-ใหญ่และช่องว่างเกิน)</p>
               </div>
 
               <div class="field">
@@ -107,6 +124,10 @@
           </div>
 
           <div>
+            <div class="card" style="margin-bottom:16px">
+              <div class="pv-eyebrow">ตัวอย่างที่นักเรียนจะเห็น</div>
+              <div id="preview"></div>
+            </div>
             <h3 style="margin-bottom:16px">ข้อสอบในคลังของวิชานี้</h3>
             <div id="qList"></div>
           </div>
@@ -167,14 +188,56 @@
 
     buildOptInputs();
     document.getElementById("qType").onchange = (e) => {
-      const isTf = e.target.value === "tf";
-      document.getElementById("mcBlock").classList.toggle("hidden", isTf);
-      document.getElementById("tfBlock").classList.toggle("hidden", !isTf);
+      const t = e.target.value;
+      document.getElementById("mcBlock").classList.toggle("hidden", t !== "mc");
+      document.getElementById("tfBlock").classList.toggle("hidden", t !== "tf");
+      document.getElementById("fillBlock").classList.toggle("hidden", t !== "fill");
+      updatePreview();
     };
 
     document.getElementById("addForm").onsubmit = onAddSubmit;
+    document.getElementById("addForm").addEventListener("input", updatePreview);
+    document.getElementById("addForm").addEventListener("change", updatePreview);
 
+    updatePreview();
     loadList();
+  }
+
+  /* ── ตัวอย่างที่นักเรียนจะเห็น อัปเดตสดขณะพิมพ์ ── */
+  function updatePreview(){
+    const type = document.getElementById("qType").value;
+    const text = document.getElementById("qText").value.trim();
+    const note = document.getElementById("qNote").value.trim();
+    const box = document.getElementById("preview");
+
+    if (!text){
+      box.innerHTML = '<p class="pv-empty">พิมพ์โจทย์เพื่อดูตัวอย่าง</p>';
+      return;
+    }
+
+    let body = "";
+    if (type === "mc"){
+      const checked = document.querySelector('input[name=mcCorrect]:checked');
+      const correctIdx = checked ? checked.value : null;
+      body = LET.map((l, i) => {
+        const v = document.getElementById("mcOpt" + i).value.trim();
+        if (!v) return "";
+        const isCorrect = correctIdx === String(i);
+        return `<div class="pv-opt${isCorrect ? " correct" : ""}">${l}. ${escHtml(v)}</div>`;
+      }).join("");
+      if (!body) body = '<p class="pv-empty">ยังไม่ได้กรอกตัวเลือก</p>';
+    } else if (type === "tf"){
+      const checked = document.querySelector('input[name=tfAns]:checked');
+      body = ["ถูก","ผิด"].map(v =>
+        `<div class="pv-opt${checked && checked.value === v ? " correct" : ""}">${v}</div>`
+      ).join("");
+    } else {
+      body = '<div class="pv-opt">(ให้นักเรียนพิมพ์คำตอบเอง)</div>';
+    }
+
+    box.innerHTML = `<div class="pv-q">${escHtml(text)}</div>${body}` +
+      (note ? `<div class="pv-note">${escHtml(note)}</div>` : "");
+    renderMath(box);
   }
 
   function buildOptInputs(){
@@ -202,19 +265,25 @@
       return;
     }
 
-    box.innerHTML = list.map(q => `
+    const typeLabel = { mc: "ปรนัย", tf: "ถูก/ผิด", fill: "เติมคำ" };
+
+    box.innerHTML = list.map(q => {
+      const answerDisplay = q.type === "fill"
+        ? String(q.answer || "").split("|").join(" / ")
+        : q.answer;
+      return `
       <div class="qrow">
         <div class="top">
           <div style="flex:1">
             <div class="t">${escHtml(q.text)}</div>
-            <div class="opts">${(q.options || []).map(o => escHtml(o)).join(" · ")}</div>
-            <div class="ans">เฉลย: ${escHtml(q.answer)} · ${q.score || 1} คะแนน</div>
+            ${(q.options && q.options.length) ? `<div class="opts">${q.options.map(o => escHtml(o)).join(" · ")}</div>` : ""}
+            <div class="ans">เฉลย (${typeLabel[q.type] || q.type}): ${escHtml(answerDisplay)} · ${q.score || 1} คะแนน</div>
             ${q.note ? `<div class="note">${escHtml(q.note)}</div>` : ""}
           </div>
           <button class="del" data-id="${escHtml(q.id)}">ลบ</button>
         </div>
-      </div>
-    `).join("");
+      </div>`;
+    }).join("");
 
     box.querySelectorAll(".del").forEach(btn => {
       btn.onclick = async () => {
@@ -223,6 +292,8 @@
         loadList();
       };
     });
+
+    renderMath(box);
   }
 
   async function onAddSubmit(e){
@@ -242,11 +313,17 @@
       if (checked) answer = document.getElementById("mcOpt" + checked.value).value.trim();
       if (options.length < 2){ msg.innerHTML = '<div class="msg bad">กรอกตัวเลือกอย่างน้อย 2 ข้อ</div>'; return; }
       if (!answer){ msg.innerHTML = '<div class="msg bad">เลือกข้อที่เป็นคำตอบที่ถูกต้องด้วย</div>'; return; }
-    } else {
+    } else if (type === "tf"){
       const checked = document.querySelector('input[name=tfAns]:checked');
       if (!checked){ msg.innerHTML = '<div class="msg bad">เลือกว่าคำตอบที่ถูกคือ ถูก หรือ ผิด</div>'; return; }
       answer = checked.value;
       options = ["ถูก","ผิด"];
+    } else {
+      const variants = document.getElementById("fillAnswers").value
+        .split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+      if (!variants.length){ msg.innerHTML = '<div class="msg bad">กรอกคำตอบที่ยอมรับอย่างน้อย 1 แบบ</div>'; return; }
+      answer = variants.join("|");
+      options = [];
     }
     if (!text){ msg.innerHTML = '<div class="msg bad">กรอกโจทย์ก่อน</div>'; return; }
 

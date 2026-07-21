@@ -130,6 +130,30 @@ function shuffleArr(a){
 }
 function normStr(v){ return String(v == null ? "" : v).trim().toLowerCase().replace(/\s+/g," "); }
 
+/* type "fill" เก็บคำตอบที่ยอมรับได้หลายแบบ คั่นด้วย | (เหมือน options) — ตอบถูกถ้าตรงแบบใดแบบหนึ่ง */
+function answerMatches(type, given, answerStored){
+  if (type === "fill"){
+    const variants = String(answerStored || "").split("|").map(normStr).filter(Boolean);
+    return variants.indexOf(normStr(given)) !== -1;
+  }
+  return normStr(given) === normStr(answerStored);
+}
+
+/* ── สมการคณิตศาสตร์ (KaTeX) ───────────────────────────────────
+   โหลดจาก CDN ในหน้าที่ต้องใช้ (admin.html, exam.html) ไฟล์นี้แค่เก็บ config กลาง
+   ปล่อยผ่านเงียบ ๆ ถ้า KaTeX ยังโหลดไม่เสร็จหรือโหลดไม่สำเร็จ (เช่นเน็ตบล็อก CDN) — ข้อความดิบยังอ่านได้อยู่ */
+const KATEX_DELIMITERS = [
+  { left: "$$", right: "$$", display: true },
+  { left: "\\[", right: "\\]", display: true },
+  { left: "$", right: "$", display: false },
+  { left: "\\(", right: "\\)", display: false }
+];
+function renderMath(el){
+  if (!el || typeof window.renderMathInElement !== "function") return;
+  try { window.renderMathInElement(el, { delimiters: KATEX_DELIMITERS, throwOnError: false }); }
+  catch(e){ /* แสดงข้อความดิบแทนถ้า render พลาด ไม่ทำให้หน้าเว็บพัง */ }
+}
+
 /* โหมดตัวอย่าง: คลังข้อสอบที่แอดมินเพิ่มผ่าน admin.html เก็บไว้ต่อวิชาใน localStorage
    ทำให้ทดลองทั้งขั้นตอน "แอดมินเพิ่มข้อสอบ → นักเรียนทำข้อสอบ → ตรวจจริง" ได้ก่อนต่อหลังบ้านจริง */
 function demoBankKey(subject){ return "examSiteDemoBank_" + subject; }

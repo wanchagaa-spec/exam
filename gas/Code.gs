@@ -25,12 +25,13 @@
  *   Q_<slug>  : id | type | text | options | answer | score | note
  *               ── หนึ่งชีตต่อหนึ่งวิชา ชื่อชีตต้องขึ้นต้นด้วย Q_ แล้วตามด้วย slug ของวิชา
  *                  เช่น Q_thai-m3, Q_math-m3 (slug ต้องตรงกับใน assets/demo-data.js)
- *               type    : "mc" (ปรนัย) หรือ "tf" (ถูก/ผิด)
+ *               type    : "mc" (ปรนัย) / "tf" (ถูก/ผิด) / "fill" (เติมคำตอบ พิมพ์เอง)
  *               options : ตัวเลือกคั่นด้วย | เช่น  60–80 ครั้ง/นาที|80–100 ครั้ง/นาที|100–120 ครั้ง/นาที
- *                         ถ้า type เป็น tf ปล่อยว่างได้ ระบบจะใช้ ถูก|ผิด ให้อัตโนมัติ
- *               answer  : ข้อความคำตอบที่ถูก ต้องตรงกับหนึ่งใน options เป๊ะ ๆ
+ *                         type เป็น tf หรือ fill ปล่อยว่างได้ (tf ใช้ ถูก|ผิด ให้อัตโนมัติ, fill ไม่มีตัวเลือก)
+ *               answer  : ข้อความคำตอบที่ถูก ต้องตรงกับหนึ่งใน options เป๊ะ ๆ (type mc/tf)
+ *                         type fill ใส่คำตอบที่ยอมรับได้หลายแบบ คั่นด้วย | เช่น 10|๑๐|สิบ — ตอบถูกถ้าตรงแบบใดแบบหนึ่ง
  *               score   : คะแนนของข้อนั้น (ปล่อยว่าง = 1 คะแนน)
- *               note    : คำอธิบายเฉลย (ไม่บังคับ)
+ *               note    : คำอธิบายเฉลย (ไม่บังคับ) พิมพ์สมการคณิตศาสตร์แบบ LaTeX ได้ เช่น $x^2+1$
  */
 
 const TOKEN          = 'exam-bank-a217053bc9a2';  // ★ ต้องตรงกับ APP.token ใน assets/site.js
@@ -166,11 +167,14 @@ function readBank_(subject) {
     const r = rows[i];
     if (!r[0]) continue;
     const type = String(r[1] || 'mc').trim();
+    let options = [];
+    if (type === 'tf') options = ['ถูก', 'ผิด'];
+    else if (type === 'mc') options = String(r[3] || '').split('|').map(s => s.trim()).filter(Boolean);
     out.push({
       id: String(r[0]),
       type: type,
       text: String(r[2] || ''),
-      options: type === 'tf' ? ['ถูก', 'ผิด'] : String(r[3] || '').split('|').map(s => s.trim()).filter(Boolean),
+      options: options,
       answer: String(r[4] || '').trim(),
       score: Number(r[5]) || 1,
       note: String(r[6] || '')
@@ -216,7 +220,7 @@ function submitExam(body) {
     const k = key[qid];
     const pt = k.score || 1;
     total += pt;
-    const right = norm_(ansIn[qid]) === norm_(k.answer);
+    const right = isCorrect_(k.type, ansIn[qid], k.answer);
     if (right) score += pt;
     detail[qid] = { correct: right, answer: k.answer, note: k.note || '' };
   });
@@ -257,9 +261,9 @@ function adminAddQuestion(body) {
   if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
 
   const subject = String(body.subject || '').slice(0, 50);
-  const type    = body.type === 'tf' ? 'tf' : 'mc';
+  const type    = (body.type === 'tf' || body.type === 'fill') ? body.type : 'mc';
   const text    = clean(body.text);
-  const options = type === 'tf' ? [] : (Array.isArray(body.options) ? body.options.map(clean).filter(Boolean) : []);
+  const options = type === 'mc' ? (Array.isArray(body.options) ? body.options.map(clean).filter(Boolean) : []) : [];
   const answer  = clean(body.answer);
   const score   = Number(body.score) || 1;
   const note    = clean(body.note);
@@ -299,6 +303,14 @@ function adminDeleteQuestion(body) {
 /* ══════════════════════════ ยูทิลิตี ══════════════════════════ */
 function shuffle_(a) { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } }
 function norm_(v) { return String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' '); }
+
+/** type "fill" เก็บคำตอบที่ยอมรับได้หลายแบบ คั่นด้วย | (เหมือน options) — ตอบถูกถ้าตรงแบบใดแบบหนึ่ง */
+function isCorrect_(type, given, answerStored) {
+  if (type === 'fill') {
+    return String(answerStored || '').split('|').map(norm_).filter(Boolean).indexOf(norm_(given)) !== -1;
+  }
+  return norm_(given) === norm_(answerStored);
+}
 
 /** กัน formula injection ในชีต */
 function clean(v) {

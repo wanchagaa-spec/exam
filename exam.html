@@ -9,8 +9,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
   /* ── ส่วนเสริมเฉพาะหน้าทำข้อสอบ (ธีมเดียวกับ style.css) ── */
+  .fillbox{width:100%;min-height:var(--tap);padding:12px 15px;font:inherit;font-size:16px;
+    border:1.5px solid var(--line);border-radius:var(--r);background:#ffffff;color:var(--ink)}
+  .fillbox:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(215,97,255,.22)}
   .examhead{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
     padding:24px 22px;margin-bottom:16px}
   .rule{display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:15.5px}
@@ -142,7 +148,7 @@
       if (bank.length){
         const chosen = shuffleArr(bank.slice()).slice(0, Math.min(subject.draw, bank.length));
         demoAnswerKey = {};
-        chosen.forEach(q => { demoAnswerKey[q.id] = { answer: q.answer, score: q.score || 1, note: q.note || "" }; });
+        chosen.forEach(q => { demoAnswerKey[q.id] = { type: q.type, answer: q.answer, score: q.score || 1, note: q.note || "" }; });
         questions = chosen.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options }));
       } else {
         questions = genDemoQuestions(subject);
@@ -218,11 +224,26 @@
       box.appendChild(c);
     });
     updateProgress();
+    renderMath(box);
 
     document.getElementById("send").onclick = onSend;
   }
 
   function field(q){
+    if (q.type === "fill"){
+      const i = document.createElement("input");
+      i.type = "text";
+      i.className = "fillbox";
+      i.placeholder = "พิมพ์คำตอบ";
+      i.setAttribute("aria-label", q.text);
+      i.oninput = () => {
+        ans[q.id] = i.value.trim();
+        document.getElementById("c_" + q.id).classList.remove("err");
+        updateProgress();
+      };
+      return i;
+    }
+
     const list = q.options || ["ถูก","ผิด"];
     const w = document.createElement("div");
     w.className = "opts";
@@ -312,7 +333,7 @@
           const k = demoAnswerKey[q.id];
           const pt = k.score || 1;
           total += pt;
-          const right = normStr(ans[q.id]) === normStr(k.answer);
+          const right = answerMatches(k.type, ans[q.id], k.answer);
           if (right) score += pt;
           detail[q.id] = { correct: right, answer: k.answer, note: k.note || "" };
         });
@@ -378,10 +399,11 @@
     questions.forEach((q, i) => {
       const d = res.detail && res.detail[q.id];
       if (!d) return;
+      const answerDisplay = String(d.answer || "").split("|").join(" หรือ ");
       h += '<div class="rev ' + (d.correct ? "r" : "w") + '">' +
         '<div class="t">' + (i+1) + '. ' + esc(q.text) + '</div>' +
         '<div class="l">คำตอบของคุณ: <b>' + esc(ans[q.id]) + '</b></div>' +
-        (d.correct ? '' : '<div class="l">คำตอบที่ถูก: <b>' + esc(d.answer) + '</b></div>') +
+        (d.correct ? '' : '<div class="l">คำตอบที่ถูก: <b>' + esc(answerDisplay) + '</b></div>') +
         (d.note ? '<div class="l">' + esc(d.note) + '</div>' : '') + '</div>';
     });
 
@@ -390,6 +412,7 @@
       '<a class="btn s" href="subjects.html">เลือกวิชาอื่น</a></div>';
 
     app.innerHTML = '<div class="mid" style="padding-top:24px">' + h + '</div>';
+    renderMath(app);
     window.scrollTo(0,0);
   }
 })();
