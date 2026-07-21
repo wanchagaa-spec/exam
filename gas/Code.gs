@@ -18,14 +18,16 @@
  *   7. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
  *
  * โครงสร้างชีตที่ต้องมี (สร้างเองใน Google Sheet เดียวกัน):
- *   Users      : timestamp | email | name | age | school | passHash
- *               ── ล็อกอินด้วยอีเมล (ไม่มี username แล้ว)
+ *   Users      : timestamp | email | name | age | school | passHash | avatar
+ *               ── ล็อกอินด้วยอีเมล (ไม่มี username แล้ว), avatar = data URL รูปย่อขนาดแล้วจากฝั่งเว็บ (เก็บตรงในเซลล์)
  *   Contact    : timestamp | name | email | message
  *   Posts      : id | timestamp | email | name | subject | text | likeCount
- *               ── โพสของบอร์ดความคิดเห็น subject ต้องตรงกับ slug ใน assets/demo-data.js
+ *               ── โพสของบอร์ดความคิดเห็น (แสดงในหน้า news.html) subject ต้องตรงกับ slug ใน assets/demo-data.js
  *   Likes      : postId | email
  *               ── 1 แถวต่อ 1 คนที่กดถูกใจ 1 โพส (ใช้เช็คว่าคนนี้เคยกดหรือยัง และลบแถวเมื่อกดยกเลิก)
  *   Comments   : id | postId | timestamp | email | name | text
+ *   Notifications : id | recipientEmail | type | postId | actorName | timestamp | read
+ *               ── แจ้งเตือนเมื่อมีคนกดถูกใจ/คอมเมนต์โพสต์ของเรา (เช็กยอดตอนโหลดหน้าเว็บ ไม่ใช่ real-time)
  *   Results    : timestamp | subject | email | name | score | total | percent | passed | usedSeconds | auto
  *   Blueprint  : subject | configName | active | order | strand | count
  *               ── "โครงสร้างชุดข้อสอบ" ของแต่ละวิชา แต่ละวิชามีได้หลายชุด (configName ตั้งชื่อเอง)
@@ -96,13 +98,18 @@ function doPost(e) {
       switch (body.action) {
         case 'register':            return json(register(body));
         case 'login':                return json(login(body));
+        case 'updateAvatar':         return json(updateAvatar(body));
         case 'contact':              return json(contact(body));
         case 'submitExam':           return json(submitExam(body));
         case 'createPost':           return json(createPost(body));
         case 'listPosts':            return json(listPosts(body));
+        case 'deletePost':           return json(deletePost(body));
         case 'toggleLike':           return json(toggleLike(body));
         case 'addComment':           return json(addComment(body));
         case 'listComments':         return json(listComments(body));
+        case 'deleteComment':        return json(deleteComment(body));
+        case 'listNotifications':    return json(listNotifications(body));
+        case 'markNotificationsRead': return json(markNotificationsRead(body));
         case 'adminLogin':           return json(adminLogin(body));
         case 'adminListQuestions':   return json(adminListQuestions(body));
         case 'adminAddQuestion':     return json(adminAddQuestion(body));
@@ -130,6 +137,8 @@ function hashPass_(email, password) {
 
 function looksLikeEmail_(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '')); }
 
+function usersSheet_() { return sheet_('Users', ['timestamp', 'email', 'name', 'age', 'school', 'passHash', 'avatar']); }
+
 function register(body) {
   const email    = clean(String(body.email || '').trim().toLowerCase());
   const name     = clean(String(body.name || '').trim());
@@ -140,29 +149,47 @@ function register(body) {
   if (!name || !school || age < 1 || age > 120 || password.length < 6)
     return { ok: false, error: 'ข้อมูลไม่ครบ หรือรหัสผ่านสั้นเกินไป' };
 
-  const sh = sheet_('Users', ['timestamp', 'email', 'name', 'age', 'school', 'passHash']);
+  const sh = usersSheet_();
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).toLowerCase() === email) return { ok: false, error: 'มีอีเมลนี้สมัครไว้แล้ว' };
   }
-  sh.appendRow([new Date(), email, name, age, school, hashPass_(email, password)]);
-  return { ok: true, email, name, age, school };
+  sh.appendRow([new Date(), email, name, age, school, hashPass_(email, password), '']);
+  return { ok: true, email, name, age, school, avatar: '' };
 }
 
 function login(body) {
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
-  const sh = sheet_('Users', ['timestamp', 'email', 'name', 'age', 'school', 'passHash']);
+  const sh = usersSheet_();
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).toLowerCase() === email) {
       if (rows[i][5] === hashPass_(email, password)) {
-        return { ok: true, email, name: rows[i][2], age: rows[i][3], school: rows[i][4] };
+        return { ok: true, email, name: rows[i][2], age: rows[i][3], school: rows[i][4], avatar: rows[i][6] || '' };
       }
       return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
     }
   }
   return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
+}
+
+/** อัปเดตรูปโปรไฟล์ (data URL ที่ย่อขนาดแล้วจากฝั่งเว็บ) — เก็บตรง ๆ ในเซลล์ชีต ไม่มีระบบเก็บไฟล์แยก */
+function updateAvatar(body) {
+  const email  = String(body.email || '').trim().toLowerCase();
+  const avatar = String(body.avatar || '');
+  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+  if (avatar.length > 45000) return { ok: false, error: 'ไฟล์รูปใหญ่เกินไป' };
+
+  const sh = usersSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).toLowerCase() === email) {
+      sh.getRange(i + 1, 7).setValue(avatar);
+      return { ok: true, avatar };
+    }
+  }
+  return { ok: false, error: 'ไม่พบบัญชีนี้' };
 }
 
 /* ══════════════════════════ ติดต่อ ══════════════════════════ */
@@ -195,11 +222,12 @@ function createPost(body) {
   const id = 'p_' + Utilities.getUuid().slice(0, 10);
   const timestamp = new Date();
   postsSheet_().appendRow([id, timestamp, email, name, subject, text, 0]);
-  return { ok: true, post: { id, timestamp: timestamp.toISOString(), name, subject, text, likeCount: 0, commentCount: 0, likedByMe: false } };
+  return { ok: true, post: { id, timestamp: timestamp.toISOString(), email, name, subject, text, likeCount: 0, commentCount: 0, likedByMe: false } };
 }
 
 function listPosts(body) {
   const subject     = String(body.subject || '').trim();
+  const authorEmail = String(body.authorEmail || '').trim().toLowerCase();
   const sort        = body.sort === 'likes' ? 'likes' : 'new';
   const viewerEmail = String(body.viewerEmail || '').trim().toLowerCase();
 
@@ -221,9 +249,11 @@ function listPosts(body) {
     const r = rows[i];
     if (!r[0]) continue;
     if (subject && String(r[4]) !== subject) continue;
+    if (authorEmail && String(r[2]).toLowerCase() !== authorEmail) continue;
     posts.push({
       id: String(r[0]),
       timestamp: (r[1] instanceof Date ? r[1] : new Date(r[1])).toISOString(),
+      email: String(r[2] || ''),
       name: String(r[3] || ''),
       subject: String(r[4] || ''),
       text: String(r[5] || ''),
@@ -238,6 +268,55 @@ function listPosts(body) {
     : (new Date(b.timestamp) - new Date(a.timestamp)));
 
   return { ok: true, posts };
+}
+
+/** ลบโพสต์ (เจ้าของเท่านั้น) พร้อมล้างคอมเมนต์/ถูกใจของโพสต์นั้นทิ้งด้วย */
+function deletePost(body) {
+  const postId = String(body.postId || '').trim();
+  const email  = String(body.email || '').trim().toLowerCase();
+  if (!postId || !email) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+
+  const postSh = postsSheet_();
+  const postRows = postSh.getDataRange().getValues();
+  let rowIndex = -1;
+  for (let i = 1; i < postRows.length; i++) {
+    if (String(postRows[i][0]) === postId) { rowIndex = i + 1; break; }
+  }
+  if (rowIndex < 0) return { ok: false, error: 'ไม่พบโพสต์นี้' };
+  if (String(postRows[rowIndex - 1][2]).toLowerCase() !== email) return { ok: false, error: 'ลบได้เฉพาะโพสต์ของตัวเอง' };
+  postSh.deleteRow(rowIndex);
+
+  const commentSh = commentsSheet_();
+  const commentRows = commentSh.getDataRange().getValues();
+  for (let i = commentRows.length - 1; i >= 1; i--) {
+    if (String(commentRows[i][1]) === postId) commentSh.deleteRow(i + 1);
+  }
+
+  const likeSh = likesSheet_();
+  const likeRows = likeSh.getDataRange().getValues();
+  for (let i = likeRows.length - 1; i >= 1; i--) {
+    if (String(likeRows[i][0]) === postId) likeSh.deleteRow(i + 1);
+  }
+
+  return { ok: true };
+}
+
+/** ลบคอมเมนต์ (เจ้าของคอมเมนต์เท่านั้น ไม่ว่าจะไปคอมเมนต์ที่โพสต์ใคร) */
+function deleteComment(body) {
+  const commentId = String(body.commentId || '').trim();
+  const email     = String(body.email || '').trim().toLowerCase();
+  if (!commentId || !email) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+
+  const sh = commentsSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === commentId) {
+      if (String(rows[i][3]).toLowerCase() !== email) return { ok: false, error: 'ลบได้เฉพาะความคิดเห็นของตัวเอง' };
+      sh.deleteRow(i + 1);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'ไม่พบความคิดเห็นนี้' };
 }
 
 function toggleLike(body) {
@@ -261,6 +340,7 @@ function toggleLike(body) {
   if (postRowIndex < 0) return { ok: false, error: 'ไม่พบโพสต์นี้' };
 
   const currentCount = Number(postRows[postRowIndex - 1][6]) || 0;
+  const postOwnerEmail = String(postRows[postRowIndex - 1][2] || '').toLowerCase();
   let liked, newCount;
   if (likeRowIndex > 0) {
     likeSh.deleteRow(likeRowIndex);
@@ -270,6 +350,9 @@ function toggleLike(body) {
     likeSh.appendRow([postId, email]);
     liked = true;
     newCount = currentCount + 1;
+    if (postOwnerEmail && postOwnerEmail !== email) {
+      notify_(postOwnerEmail, 'like', postId, body.name || email);
+    }
   }
   postSh.getRange(postRowIndex, 7).setValue(newCount);
 
@@ -286,7 +369,15 @@ function addComment(body) {
   const id = 'c_' + Utilities.getUuid().slice(0, 10);
   const timestamp = new Date();
   commentsSheet_().appendRow([id, postId, timestamp, email, name, text]);
-  return { ok: true, comment: { id, timestamp: timestamp.toISOString(), name, text } };
+
+  const postRows = postsSheet_().getDataRange().getValues();
+  const postRow = postRows.find(r => String(r[0]) === postId);
+  const postOwnerEmail = postRow ? String(postRow[2] || '').toLowerCase() : '';
+  if (postOwnerEmail && postOwnerEmail !== email) {
+    notify_(postOwnerEmail, 'comment', postId, name);
+  }
+
+  return { ok: true, comment: { id, timestamp: timestamp.toISOString(), email, name, text } };
 }
 
 function listComments(body) {
@@ -299,12 +390,61 @@ function listComments(body) {
     comments.push({
       id: String(r[0]),
       timestamp: (r[2] instanceof Date ? r[2] : new Date(r[2])).toISOString(),
+      email: String(r[3] || ''),
       name: String(r[4] || ''),
       text: String(r[5] || '')
     });
   }
   comments.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   return { ok: true, comments };
+}
+
+/* ══════════════════════════ แจ้งเตือน (ถูกใจ/คอมเมนต์บนโพสต์ของฉัน) ══════════════════════════
+   ⚠ เป็น static site ไม่มี push/real-time จริง ๆ ได้ — เช็กยอดใหม่ตอนโหลดหน้าเว็บเท่านั้น */
+function notificationsSheet_() { return sheet_('Notifications', ['id', 'recipientEmail', 'type', 'postId', 'actorName', 'timestamp', 'read']); }
+
+function notify_(recipientEmail, type, postId, actorName) {
+  const id = 'n_' + Utilities.getUuid().slice(0, 10);
+  notificationsSheet_().appendRow([id, recipientEmail, type, postId, actorName, new Date(), false]);
+}
+
+function listNotifications(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+
+  const rows = notificationsSheet_().getDataRange().getValues();
+  const list = [];
+  let unreadCount = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || String(r[1]).toLowerCase() !== email) continue;
+    const isRead = !!r[6];
+    if (!isRead) unreadCount++;
+    list.push({
+      id: String(r[0]),
+      type: String(r[2] || ''),
+      postId: String(r[3] || ''),
+      actorName: String(r[4] || ''),
+      timestamp: (r[5] instanceof Date ? r[5] : new Date(r[5])).toISOString(),
+      read: isRead
+    });
+  }
+  list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  return { ok: true, notifications: list.slice(0, 30), unreadCount };
+}
+
+function markNotificationsRead(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+
+  const sh = notificationsSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).toLowerCase() === email && !rows[i][6]) {
+      sh.getRange(i + 1, 7).setValue(true);
+    }
+  }
+  return { ok: true };
 }
 
 /* ══════════════════════════ ข้อสอบ: สุ่มจากคลัง ══════════════════════════ */

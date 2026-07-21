@@ -3,43 +3,277 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>บัญชีของฉัน — ข้อสอบ</title>
+<title>ข้อมูลส่วนตัว — ข้อสอบ</title>
 <link rel="icon" href="assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<style>
+  .profilecard{display:flex;gap:18px;align-items:center;justify-content:flex-end;text-align:right;margin-bottom:26px}
+  .profilecard .who h1{font-size:22px;margin-bottom:4px}
+  .profilecard .pic{flex:none;text-align:center}
+  .post{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;margin-bottom:14px}
+  .post .head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}
+  .post .who{font-weight:700}
+  .post .when{font-size:13px;color:var(--muted2);white-space:nowrap}
+  .post .body{white-space:pre-wrap;line-height:1.6;margin-bottom:14px}
+  .post .actions{display:flex;gap:8px;border-top:1px solid var(--line);padding-top:10px;flex-wrap:wrap}
+  .actbtn{background:none;border:none;cursor:pointer;font-weight:600;font-size:14.5px;color:var(--muted);
+    padding:8px 14px;border-radius:8px;display:flex;align-items:center;gap:6px}
+  .actbtn:hover{background:var(--card-hi);color:var(--ink)}
+  .actbtn.liked{color:var(--accent)}
+  .actbtn.delbtn{color:var(--danger);margin-left:auto}
+  .comments{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+  .comment{display:flex;flex-direction:column;background:var(--bg0);border:1px solid var(--line);border-radius:10px;
+    padding:10px 13px;margin-bottom:8px}
+  .comment .who{font-weight:700;font-size:14px}
+  .comment .when{font-size:12px;color:var(--muted2)}
+  .comment .txt{font-size:14.5px;margin-top:3px;white-space:pre-wrap}
+  .comment .delc{background:none;border:none;color:var(--danger);font-size:12px;cursor:pointer;margin-top:4px;align-self:flex-start}
+  .commentForm{display:flex;gap:8px;margin-top:8px}
+  .commentForm input{flex:1;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font:inherit;font-size:14.5px}
+</style>
 </head>
 <body>
 
 <main>
   <section class="section" style="padding-top:56px">
-    <div class="wrap narrow">
-      <div class="auth-card">
-        <h1 id="hi"></h1>
-        <div id="profile" class="muted" style="margin-bottom:22px;font-size:14.5px"></div>
-        <a class="btn p block" href="subjects.html" style="margin-bottom:10px">ทำข้อสอบต่อ</a>
-        <a class="btn s block" href="feedback.html" style="margin-bottom:10px">ไปที่บอร์ดความคิดเห็น</a>
-        <button class="btn s block" id="logout">ออกจากระบบ</button>
+    <div class="wrap" style="max-width:720px;margin:0 auto">
+
+      <div class="profilecard">
+        <div class="who">
+          <h1 id="hi"></h1>
+          <div id="profile" class="muted" style="font-size:14px"></div>
+        </div>
+        <div class="pic">
+          <div id="avatarBox"></div>
+          <input type="file" id="avatarInput" accept="image/*" class="hidden">
+          <button class="btn s" id="avatarBtn" type="button" style="margin-top:8px;min-height:36px;padding:0 14px;font-size:12.5px">เปลี่ยนรูป</button>
+        </div>
       </div>
+      <div id="avatarMsg"></div>
+
+      <div class="card" style="margin-bottom:26px">
+        <h3 style="margin-bottom:14px">โพสต์อะไรบางอย่าง</h3>
+        <form id="postForm">
+          <div class="field">
+            <label for="pSubject">หมวดหมู่ (วิชา)</label>
+            <select id="pSubject" required></select>
+          </div>
+          <div class="field">
+            <label for="pText">ข้อความ <span class="req">*</span></label>
+            <textarea id="pText" placeholder="เขียนอะไรบางอย่าง…" required maxlength="1000"></textarea>
+          </div>
+          <button class="btn p block" type="submit">โพสต์</button>
+        </form>
+      </div>
+
+      <h2 style="font-size:20px;margin-bottom:14px">โพสต์ของฉัน</h2>
+      <div id="postMsg"></div>
+      <div id="list"></div>
     </div>
   </section>
 </main>
 
 <script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
 <script>
+(function(){
+  "use strict";
   renderHeader("account.html");
   renderFooter();
 
-  if (!requireLogin()) { /* redirected */ }
+  if (!requireLogin()) return;
   const user = getSession();
-  if (user){
-    document.getElementById("hi").textContent = "สวัสดี " + user.name;
-    document.getElementById("profile").innerHTML =
-      `${escHtml(user.email || "")}${user.school ? " · " + escHtml(user.school) : ""}${user.age ? " · อายุ " + escHtml(String(user.age)) + " ปี" : ""}`;
+
+  document.getElementById("hi").textContent = user.name;
+  document.getElementById("profile").innerHTML =
+    `${escHtml(user.email || "")}${user.school ? " · " + escHtml(user.school) : ""}${user.age ? " · อายุ " + escHtml(String(user.age)) + " ปี" : ""}`;
+
+  function renderAvatarBox(){
+    document.getElementById("avatarBox").innerHTML = avatarHtml(user, 84);
+  }
+  renderAvatarBox();
+
+  document.getElementById("avatarBtn").onclick = () => document.getElementById("avatarInput").click();
+  document.getElementById("avatarInput").onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = document.getElementById("avatarMsg");
+    msg.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังอัปโหลด…</p>';
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 160);
+      const res = await apiCall("updateAvatar", { email: user.email, avatar: dataUrl });
+      if (res.ok){
+        user.avatar = dataUrl;
+        setSession(user);
+        renderAvatarBox();
+        msg.innerHTML = '<div class="msg ok">เปลี่ยนรูปโปรไฟล์แล้ว</div>';
+      } else {
+        msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "อัปโหลดไม่สำเร็จ")}</div>`;
+      }
+    } catch (err) {
+      msg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
+    }
+    e.target.value = "";
+  };
+
+  const subjectSel = document.getElementById("pSubject");
+  subjectSel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+  function subjectMeta(slug){ return SUBJECTS.find(s => s.slug === slug); }
+  function fmtTime(iso){
+    try { return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }); }
+    catch(e){ return ""; }
   }
 
-  document.getElementById("logout").onclick = () => { clearSession(); location.href = "index.html"; };
+  const expanded = new Set();
+  const commentsCache = {};
+
+  async function loadMyPosts(){
+    const list = document.getElementById("list");
+    list.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("listPosts", { authorEmail: user.email, sort: "new", viewerEmail: user.email });
+    if (!res.ok){ list.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+    renderPosts(res.posts || []);
+  }
+
+  function renderPosts(posts){
+    const list = document.getElementById("list");
+    if (!posts.length){
+      list.innerHTML = '<p class="muted">ยังไม่มีโพสต์</p>';
+      return;
+    }
+    list.innerHTML = posts.map(p => {
+      const meta = subjectMeta(p.subject);
+      const open = expanded.has(p.id);
+      return `
+      <div class="post" data-id="${escHtml(p.id)}">
+        <div class="head">
+          <div>
+            <div class="who">${escHtml(p.name)}</div>
+            ${meta ? `<span class="tag" style="margin-top:6px">${meta.icon} ${escHtml(meta.name)}</span>` : ""}
+          </div>
+          <span class="when">${fmtTime(p.timestamp)}</span>
+        </div>
+        <div class="body">${escHtml(p.text)}</div>
+        <div class="actions">
+          <button class="actbtn likeBtn ${p.likedByMe ? "liked" : ""}" type="button">${p.likedByMe ? "❤️" : "🤍"} ถูกใจ (${p.likeCount})</button>
+          <button class="actbtn cmtToggle" type="button">💬 ความคิดเห็น (${p.commentCount})</button>
+          <button class="actbtn delbtn delPostBtn" type="button">ลบโพสต์</button>
+        </div>
+        <div class="comments ${open ? "" : "hidden"}">
+          <div class="commentList"></div>
+          <form class="commentForm">
+            <input type="text" placeholder="เขียนความคิดเห็น…" maxlength="500" required>
+            <button class="btn s" type="submit">ส่ง</button>
+          </form>
+        </div>
+      </div>`;
+    }).join("");
+
+    list.querySelectorAll(".post").forEach(card => {
+      const id = card.dataset.id;
+      card.querySelector(".likeBtn").onclick = () => onToggleLike(id, card);
+      card.querySelector(".cmtToggle").onclick = () => onToggleComments(id, card);
+      card.querySelector(".delPostBtn").onclick = () => onDeletePost(id);
+      card.querySelector(".commentForm").onsubmit = (e) => onAddComment(e, id, card);
+      if (expanded.has(id)) renderComments(id, card);
+    });
+  }
+
+  async function onToggleLike(id, card){
+    const btn = card.querySelector(".likeBtn");
+    btn.disabled = true;
+    const res = await apiCall("toggleLike", { postId: id, email: user.email, name: user.name });
+    btn.disabled = false;
+    if (!res.ok) return;
+    btn.classList.toggle("liked", res.liked);
+    btn.textContent = `${res.liked ? "❤️" : "🤍"} ถูกใจ (${res.likeCount})`;
+  }
+
+  function onToggleComments(id, card){
+    const box = card.querySelector(".comments");
+    const nowOpen = box.classList.contains("hidden");
+    box.classList.toggle("hidden");
+    if (nowOpen){ expanded.add(id); renderComments(id, card); }
+    else expanded.delete(id);
+  }
+
+  async function renderComments(id, card){
+    const box = card.querySelector(".commentList");
+    box.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังโหลด…</p>';
+    const res = await apiCall("listComments", { postId: id });
+    commentsCache[id] = (res.ok && res.comments) || [];
+    const comments = commentsCache[id];
+    box.innerHTML = comments.length
+      ? comments.map(c => `
+        <div class="comment" data-id="${escHtml(c.id)}">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <span class="who">${escHtml(c.name)}</span>
+            <span class="when">${fmtTime(c.timestamp)}</span>
+          </div>
+          <div class="txt">${escHtml(c.text)}</div>
+          ${c.email === user.email ? '<button class="delc" type="button">ลบความคิดเห็น</button>' : ""}
+        </div>`).join("")
+      : '<p class="muted" style="font-size:13.5px">ยังไม่มีความคิดเห็น</p>';
+
+    box.querySelectorAll(".delc").forEach(btn => {
+      btn.onclick = async () => {
+        const commentId = btn.closest(".comment").dataset.id;
+        const res2 = await apiCall("deleteComment", { commentId, email: user.email });
+        if (res2.ok) renderComments(id, card);
+      };
+    });
+  }
+
+  async function onAddComment(e, id, card){
+    e.preventDefault();
+    const input = card.querySelector(".commentForm input");
+    const text = input.value.trim();
+    if (!text) return;
+    const btn = card.querySelector(".commentForm button");
+    btn.disabled = true;
+    const res = await apiCall("addComment", { postId: id, email: user.email, name: user.name, text });
+    btn.disabled = false;
+    if (!res.ok) return;
+    input.value = "";
+    renderComments(id, card);
+    const cmtBtn = card.querySelector(".cmtToggle");
+    const n = ((commentsCache[id] || []).length);
+    cmtBtn.textContent = `💬 ความคิดเห็น (${n})`;
+  }
+
+  async function onDeletePost(id){
+    if (!confirm("ลบโพสต์นี้ทิ้ง?")) return;
+    const res = await apiCall("deletePost", { postId: id, email: user.email });
+    if (res.ok) loadMyPosts();
+  }
+
+  document.getElementById("postForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const subject = subjectSel.value;
+    const text = document.getElementById("pText").value.trim();
+    if (!subject || !text) return;
+
+    const btn = e.target.querySelector("button");
+    btn.disabled = true; btn.textContent = "กำลังโพสต์…";
+
+    const res = await apiCall("createPost", { email: user.email, name: user.name, subject, text });
+
+    if (res.ok){
+      document.getElementById("postMsg").innerHTML = '<div class="msg ok">โพสต์เรียบร้อยแล้ว</div>';
+      e.target.reset();
+      subjectSel.value = subject;
+      loadMyPosts();
+    } else {
+      document.getElementById("postMsg").innerHTML = `<div class="msg bad">${escHtml(res.error || "โพสต์ไม่สำเร็จ")}</div>`;
+    }
+    btn.disabled = false; btn.textContent = "โพสต์";
+  };
+
+  loadMyPosts();
+})();
 </script>
 </body>
 </html>

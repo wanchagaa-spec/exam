@@ -22,12 +22,12 @@ window.APP = {
   demoAdminPassword: "admin123"
 };
 
+/* รายการเมนูสำหรับฟุตเตอร์เท่านั้น (header ใช้แถบไอคอนแทนแล้ว) */
 const NAV = [
   { href:"index.html",     label:"หน้าแรก" },
   { href:"subjects.html",  label:"รายวิชา / ทำข้อสอบ" },
   { href:"news.html",      label:"ข่าวสาร / กิจกรรม" },
   { href:"downloads.html", label:"ดาวน์โหลดเอกสาร" },
-  { href:"feedback.html",  label:"บอร์ดความคิดเห็น" },
   { href:"contact.html",   label:"ติดต่อเรา" }
 ];
 
@@ -35,35 +35,113 @@ function escHtml(s){
   return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }
 
-/* ── หัวเว็บ + นำทาง ─────────────────────────────────────────── */
+const NOTIF_LABEL = { like: "กดถูกใจโพสต์ของคุณ", comment: "แสดงความคิดเห็นในโพสต์ของคุณ" };
+function avatarHtml(user, size){
+  size = size || 34;
+  if (user && user.avatar) return `<img class="avatar" style="width:${size}px;height:${size}px" src="${user.avatar}" alt="">`;
+  const initial = user && user.name ? user.name.trim().charAt(0) : "?";
+  return `<span class="avatar initial" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.45)}px">${escHtml(initial)}</span>`;
+}
+
+/* ── หัวเว็บ + นำทาง (แถบไอคอนรวม: โพสต์ / หน้าแรก / ข่าวสาร / แจ้งเตือน / โปรไฟล์) ── */
 function renderHeader(active){
   const page = (location.pathname.split("/").pop() || "index.html");
+  const cur = active || page;
   const user = getSession();
+  const on = href => cur === href ? "on" : "";
 
-  const links = NAV.map(n =>
-    `<a href="${n.href}" class="${(active || page) === n.href ? "on" : ""}">${n.label}</a>`
-  ).join("");
-
-  const authLink = user
-    ? `<a href="account.html">${escHtml(user.name)}</a><a href="#" id="logoutLink">ออกจากระบบ</a>`
-    : `<a href="login.html">เข้าสู่ระบบ</a>`;
+  const iconsHtml = user ? `
+      <a class="navicon" href="news.html#compose" title="โพสต์" aria-label="โพสต์">+</a>
+      <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
+      <a class="navicon ${on("news.html")}" href="news.html" title="ข่าวสาร" aria-label="ข่าวสาร">📰</a>
+      <button class="navicon" id="bellBtn" type="button" title="แจ้งเตือน" aria-label="แจ้งเตือน">
+        🔔<span class="badge hidden" id="notifBadge">0</span>
+      </button>
+      <div class="usermenu">
+        <button class="userbtn" id="userBtn" type="button">
+          <span class="uname">${escHtml(user.name)}</span>
+          ${avatarHtml(user)}
+        </button>
+        <div class="dropdown hidden" id="userDropdown">
+          <a href="account.html">ข้อมูลส่วนตัว</a>
+          <a href="subjects.html">รายวิชา/ทำข้อสอบ</a>
+          <a href="downloads.html">ดาวน์โหลดเอกสาร</a>
+          <a href="contact.html">ติดต่อเรา</a>
+          <a href="#" id="logoutLink">ออกจากระบบ</a>
+        </div>
+      </div>
+      <div class="notifpanel hidden" id="notifPanel"><p class="muted" style="padding:14px;font-size:14px">กำลังโหลด…</p></div>
+    ` : `
+      <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
+      <a class="navicon ${on("news.html")}" href="news.html" title="ข่าวสาร" aria-label="ข่าวสาร">📰</a>
+      <a href="login.html" style="display:inline-flex;align-items:center;min-height:40px;padding:0 18px;border-radius:999px;background:#fff;color:var(--accent-ink);font-weight:700;font-size:14.5px">เข้าสู่ระบบ</a>
+    `;
 
   document.body.insertAdjacentHTML("afterbegin", `
     ${APP.demoMode ? '<div class="demo-banner">โหมดตัวอย่าง · ข้อมูลทั้งหมดในเว็บนี้เป็นข้อมูลจำลอง ยังไม่เชื่อมระบบจริง</div>' : ""}
     <header class="site">
       <div class="nav">
-        <a class="brand" href="index.html"><span class="dot"></span>${escHtml(APP.orgName)}</a>
-        <button class="navburger" id="burger" aria-label="เมนู">&#9776;</button>
-        <nav class="navlinks" id="navlinks">${links}${authLink}</nav>
+        <a class="brand" href="index.html"><span class="dot"></span><span>${escHtml(APP.orgName)}</span></a>
+        <div class="navicons">${iconsHtml}</div>
       </div>
     </header>
   `);
 
-  document.getElementById("burger").onclick = () =>
-    document.getElementById("navlinks").classList.toggle("open");
+  if (!user) return;
 
   const lo = document.getElementById("logoutLink");
-  if (lo) lo.onclick = (e) => { e.preventDefault(); clearSession(); location.href = "index.html"; };
+  lo.onclick = (e) => { e.preventDefault(); clearSession(); location.href = "index.html"; };
+
+  const userBtn = document.getElementById("userBtn");
+  const userDropdown = document.getElementById("userDropdown");
+  const bellBtn = document.getElementById("bellBtn");
+  const notifPanel = document.getElementById("notifPanel");
+  const notifBadge = document.getElementById("notifBadge");
+
+  function closePanels(){ userDropdown.classList.add("hidden"); notifPanel.classList.add("hidden"); }
+
+  userBtn.onclick = (e) => {
+    e.stopPropagation();
+    const willOpen = userDropdown.classList.contains("hidden");
+    closePanels();
+    if (willOpen) userDropdown.classList.remove("hidden");
+  };
+
+  async function loadNotifPanel(){
+    const res = await apiCall("listNotifications", { email: user.email });
+    if (!res.ok){ notifPanel.innerHTML = `<div class="msg bad" style="margin:10px">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+    const list = res.notifications || [];
+    notifPanel.innerHTML = list.length
+      ? list.map(n => `<div class="notif-item ${n.read ? "" : "unread"}">
+          <b>${escHtml(n.actorName)}</b> ${escHtml(NOTIF_LABEL[n.type] || n.type)}
+          <div class="muted" style="font-size:12px;margin-top:2px">${new Date(n.timestamp).toLocaleString("th-TH",{dateStyle:"short",timeStyle:"short"})}</div>
+        </div>`).join("")
+      : '<p class="muted" style="padding:14px;font-size:14px">ยังไม่มีการแจ้งเตือน</p>';
+  }
+
+  bellBtn.onclick = (e) => {
+    e.stopPropagation();
+    const willOpen = notifPanel.classList.contains("hidden");
+    closePanels();
+    if (willOpen){
+      notifPanel.classList.remove("hidden");
+      loadNotifPanel();
+      apiCall("markNotificationsRead", { email: user.email }).then(() => {
+        notifBadge.classList.add("hidden");
+        notifBadge.textContent = "0";
+      });
+    }
+  };
+
+  document.addEventListener("click", closePanels);
+
+  (async function refreshBadge(){
+    const res = await apiCall("listNotifications", { email: user.email });
+    if (res.ok && res.unreadCount){
+      notifBadge.textContent = res.unreadCount > 9 ? "9+" : String(res.unreadCount);
+      notifBadge.classList.remove("hidden");
+    }
+  })();
 }
 
 /* ── ฟุตเตอร์ ─────────────────────────────────────────────────── */
@@ -118,6 +196,27 @@ function demoUsers(){
   try { return JSON.parse(localStorage.getItem(USERS_KEY) || "[]"); } catch(e){ return []; }
 }
 function demoSaveUsers(list){ localStorage.setItem(USERS_KEY, JSON.stringify(list)); }
+
+/* ย่อรูปที่อัปโหลด (avatar) เหลือรูปสี่เหลี่ยมจัตุรัสเล็ก ๆ แล้วแปลงเป็น data URL (JPEG)
+   เก็บตรง ๆ ในเซลล์ Google Sheet ได้เลย เว็บนี้ไม่มีระบบเก็บไฟล์แยกต่างหาก */
+function resizeImageToDataUrl(file, maxSize){
+  maxSize = maxSize || 160;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.onload = () => { img.onerror = () => reject(new Error("เปิดรูปไม่สำเร็จ")); img.src = reader.result; };
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = maxSize; canvas.height = maxSize;
+      canvas.getContext("2d").drawImage(img, sx, sy, side, side, 0, 0, maxSize, maxSize);
+      resolve(canvas.toDataURL("image/jpeg", 0.75));
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 async function sha256(text){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -186,6 +285,17 @@ function demoLikesSave(list){ localStorage.setItem(DEMO_LIKES_KEY, JSON.stringif
 function demoCommentsLoad(){ try { return JSON.parse(localStorage.getItem(DEMO_COMMENTS_KEY) || "[]"); } catch(e){ return []; } }
 function demoCommentsSave(list){ localStorage.setItem(DEMO_COMMENTS_KEY, JSON.stringify(list)); }
 
+/* โหมดตัวอย่าง: แจ้งเตือนถูกใจ/คอมเมนต์บนโพสต์ของตัวเอง */
+const DEMO_NOTIF_KEY = "examSiteDemoNotifications";
+function demoNotificationsLoad(){ try { return JSON.parse(localStorage.getItem(DEMO_NOTIF_KEY) || "[]"); } catch(e){ return []; } }
+function demoNotificationsSave(list){ localStorage.setItem(DEMO_NOTIF_KEY, JSON.stringify(list)); }
+function demoNotify(recipientEmail, type, postId, actorName){
+  const list = demoNotificationsLoad();
+  list.push({ id: "n_" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+              recipientEmail, type, postId, actorName, timestamp: new Date().toISOString(), read:false });
+  demoNotificationsSave(list);
+}
+
 /* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
 async function blueprintSummary(subject){
   const res = await apiCall("blueprint", { subject });
@@ -218,9 +328,9 @@ async function demoApi(action, payload){
     const email = String(payload.email || "").trim().toLowerCase();
     if (users.some(u => u.email === email))
       return { ok:false, error:"มีอีเมลนี้สมัครไว้แล้ว" };
-    users.push({ email, name: payload.name, age: payload.age, school: payload.school, passHash: await sha256(payload.password) });
+    users.push({ email, name: payload.name, age: payload.age, school: payload.school, passHash: await sha256(payload.password), avatar: "" });
     demoSaveUsers(users);
-    return { ok:true, email, name: payload.name, age: payload.age, school: payload.school };
+    return { ok:true, email, name: payload.name, age: payload.age, school: payload.school, avatar: "" };
   }
 
   if (action === "login"){
@@ -228,7 +338,16 @@ async function demoApi(action, payload){
     const u = users.find(x => x.email === email);
     if (!u || u.passHash !== await sha256(payload.password))
       return { ok:false, error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง" };
-    return { ok:true, email: u.email, name: u.name, age: u.age, school: u.school };
+    return { ok:true, email: u.email, name: u.name, age: u.age, school: u.school, avatar: u.avatar || "" };
+  }
+
+  if (action === "updateAvatar"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    const idx = users.findIndex(u => u.email === email);
+    if (idx < 0) return { ok:false, error:"ไม่พบบัญชีนี้" };
+    users[idx].avatar = payload.avatar || "";
+    demoSaveUsers(users);
+    return { ok:true, avatar: users[idx].avatar };
   }
 
   if (action === "contact") return { ok:true };
@@ -321,12 +440,14 @@ async function demoApi(action, payload){
 
   if (action === "listPosts"){
     const subject = String(payload.subject || "").trim();
+    const authorEmail = String(payload.authorEmail || "").trim().toLowerCase();
     const sort = payload.sort === "likes" ? "likes" : "new";
     const viewerEmail = String(payload.viewerEmail || "").trim().toLowerCase();
     const likes = demoLikesLoad();
     const comments = demoCommentsLoad();
     let posts = demoPostsLoad();
     if (subject) posts = posts.filter(p => p.subject === subject);
+    if (authorEmail) posts = posts.filter(p => p.email === authorEmail);
     posts = posts.map(p => Object.assign({}, p, {
       commentCount: comments.filter(c => c.postId === p.id).length,
       likedByMe: viewerEmail ? likes.some(l => l.postId === p.id && l.email === viewerEmail) : false
@@ -335,6 +456,18 @@ async function demoApi(action, payload){
       ? (b.likeCount - a.likeCount) || (new Date(b.timestamp) - new Date(a.timestamp))
       : (new Date(b.timestamp) - new Date(a.timestamp)));
     return { ok:true, posts };
+  }
+
+  if (action === "deletePost"){
+    const postId = payload.postId, email = String(payload.email || "").trim().toLowerCase();
+    const posts = demoPostsLoad();
+    const post = posts.find(p => p.id === postId);
+    if (!post) return { ok:false, error:"ไม่พบโพสต์นี้" };
+    if (post.email !== email) return { ok:false, error:"ลบได้เฉพาะโพสต์ของตัวเอง" };
+    demoPostsSave(posts.filter(p => p.id !== postId));
+    demoCommentsSave(demoCommentsLoad().filter(c => c.postId !== postId));
+    demoLikesSave(demoLikesLoad().filter(l => l.postId !== postId));
+    return { ok:true };
   }
 
   if (action === "toggleLike"){
@@ -347,7 +480,10 @@ async function demoApi(action, payload){
     const idx = likes.findIndex(l => l.postId === postId && l.email === email);
     let liked;
     if (idx >= 0){ likes.splice(idx,1); liked = false; post.likeCount = Math.max(0,(post.likeCount||0)-1); }
-    else { likes.push({ postId, email }); liked = true; post.likeCount = (post.likeCount||0)+1; }
+    else {
+      likes.push({ postId, email }); liked = true; post.likeCount = (post.likeCount||0)+1;
+      if (post.email && post.email !== email) demoNotify(post.email, "like", postId, payload.name || email);
+    }
     demoLikesSave(likes);
     demoPostsSave(posts);
     return { ok:true, liked, likeCount: post.likeCount };
@@ -364,6 +500,8 @@ async function demoApi(action, payload){
                        postId, timestamp: new Date().toISOString(), email, name, text };
     comments.push(comment);
     demoCommentsSave(comments);
+    const post = demoPostsLoad().find(p => p.id === postId);
+    if (post && post.email && post.email !== email) demoNotify(post.email, "comment", postId, name);
     return { ok:true, comment };
   }
 
@@ -372,6 +510,32 @@ async function demoApi(action, payload){
     const comments = demoCommentsLoad().filter(c => c.postId === postId)
       .sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
     return { ok:true, comments };
+  }
+
+  if (action === "deleteComment"){
+    const commentId = payload.commentId, email = String(payload.email || "").trim().toLowerCase();
+    const comments = demoCommentsLoad();
+    const comment = comments.find(c => c.id === commentId);
+    if (!comment) return { ok:false, error:"ไม่พบความคิดเห็นนี้" };
+    if (comment.email !== email) return { ok:false, error:"ลบได้เฉพาะความคิดเห็นของตัวเอง" };
+    demoCommentsSave(comments.filter(c => c.id !== commentId));
+    return { ok:true };
+  }
+
+  if (action === "listNotifications"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    const list = demoNotificationsLoad().filter(n => n.recipientEmail === email)
+      .sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const unreadCount = list.filter(n => !n.read).length;
+    return { ok:true, notifications: list.slice(0,30), unreadCount };
+  }
+
+  if (action === "markNotificationsRead"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    const list = demoNotificationsLoad();
+    list.forEach(n => { if (n.recipientEmail === email) n.read = true; });
+    demoNotificationsSave(list);
+    return { ok:true };
   }
 
   return { ok:false, error:"โหมดตัวอย่างไม่รองรับคำสั่งนี้" };

@@ -57,25 +57,41 @@ img{max-width:100%;display:block}
 .btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 .btn.block{width:100%}
 
-/* ── หัวเว็บ / นำทาง ──────────────────────────────────────── */
+/* ── หัวเว็บ / นำทาง (แถบไอคอนรวม สีชมพูธีมเดิม) ──────────────────────── */
 header.site{position:sticky;top:0;z-index:50;
-  background:rgba(255,255,255,.82);backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--line)}
-.nav{display:flex;align-items:center;gap:18px;padding:14px 20px;max-width:var(--wrap);margin:0 auto}
-.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;margin-right:auto}
-.brand .dot{width:11px;height:11px;border-radius:50%;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
-  box-shadow:0 0 14px var(--accent)}
-.navlinks{display:flex;gap:4px;align-items:center}
-.navlinks a{padding:10px 14px;border-radius:999px;font-weight:600;font-size:15px;color:var(--muted);white-space:nowrap}
-.navlinks a:hover,.navlinks a.on{color:var(--ink);background:var(--card)}
-.navburger{display:none;background:none;border:none;color:var(--ink);font-size:26px;cursor:pointer;padding:6px}
-@media (max-width:860px){
-  .navlinks{position:fixed;inset:64px 0 0 0;flex-direction:column;align-items:stretch;
-    background:var(--bg1);padding:14px;gap:6px;display:none;overflow-y:auto}
-  .navlinks.open{display:flex}
-  .navlinks a{padding:16px;font-size:17px;border-bottom:1px solid var(--line);border-radius:8px}
-  .navburger{display:block}
+  box-shadow:0 2px 16px rgba(215,97,255,.25)}
+.nav{display:flex;align-items:center;gap:14px;padding:12px 20px;max-width:var(--wrap);margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;margin-right:auto;color:#fff}
+.brand .dot{width:11px;height:11px;border-radius:50%;
+  background:#fff;box-shadow:0 0 14px rgba(255,255,255,.8)}
+.navicons{display:flex;align-items:center;gap:6px;position:relative}
+.navicon{display:flex;align-items:center;justify-content:center;position:relative;
+  width:44px;height:44px;border-radius:50%;font-size:19px;color:#fff;background:none;border:none;
+  cursor:pointer;line-height:1}
+.navicon:hover,.navicon.on{background:rgba(255,255,255,.22)}
+.badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 3px;border-radius:99px;
+  background:var(--danger);color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.usermenu{position:relative}
+.userbtn{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.16);border:none;
+  border-radius:999px;padding:5px 14px 5px 6px;cursor:pointer;height:44px}
+.userbtn:hover{background:rgba(255,255,255,.28)}
+.uname{color:#fff;font-weight:700;font-size:14.5px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.avatar{border-radius:50%;object-fit:cover;background:rgba(255,255,255,.35);flex:none}
+.avatar.initial{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;background:rgba(255,255,255,.3)}
+.dropdown,.notifpanel{position:absolute;top:52px;right:0;background:var(--bg0);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 14px 34px rgba(0,0,0,.16);
+  min-width:210px;overflow:hidden;z-index:60}
+.dropdown a{display:block;padding:13px 18px;font-weight:600;font-size:14.5px;color:var(--ink)}
+.dropdown a:hover{background:var(--card)}
+.notifpanel{min-width:280px;max-width:320px;max-height:360px;overflow-y:auto}
+.notif-item{padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line)}
+.notif-item:last-child{border-bottom:none}
+.notif-item.unread{background:rgba(215,97,255,.07)}
+@media (max-width:600px){
+  .brand span:not(.dot){display:none}
+  .uname{display:none}
+  .userbtn{padding:5px}
 }
 
 /* ── ฟุตเตอร์ ─────────────────────────────────────────────── */
