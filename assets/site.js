@@ -9,13 +9,12 @@ window.APP = {
      ไม่มีข้อมูลส่งออกไปไหนจริง ให้ลูกค้าทดลองเว็บได้ก่อนเชื่อมหลังบ้านจริง
      ⚠ ก่อนใช้งานจริง ให้เปลี่ยนเป็น false และตั้ง endpoint + token ให้ตรงกับ gas/Code.gs */
   demoMode: true,
-  endpoint: "",                            // URL ของ Apps Script Web app (ดู gas/Code.gs)
-  token:    "exam-bank-a217053bc9a2",      // ต้องตรงกับ TOKEN ใน gas/Code.gs
+  endpoint: "https://script.google.com/macros/s/AKfycbzajb2FuPJeuIsrpEGOqkjT-Q5b7ptfiJNgcxzpZZhYy0AiLTOQjGo5RF2uKCcEsywa/exec",                            // URL ของ Apps Script Web app (ดู gas/Code.gs)
+  token:    "ai75jg8f3d9g7k3",      // ต้องตรงกับ TOKEN ใน gas/Code.gs
 
   facebook: "https://www.facebook.com/",   // ★ ใส่ลิงก์ Facebook Page จริง
-  contactEmail: "contact@example.com",     // ★ อีเมลปลายทางฟอร์มติดต่อ (ตั้งใน Code.gs)
-  contactName:  "วันชัย",
-  contactPhone: "066-000-0000",
+  contactEmail: "wanchagaa.fe@gmail.com",     // ★ อีเมลปลายทางฟอร์มติดต่อ (ตั้งใน Code.gs)
+  contactName:  "วันชัย วรรณวงค์"
 
   /* รหัสผ่านแอดมิน ใช้เฉพาะตอน demoMode = true เพื่อทดลองหน้า admin.html ในเครื่อง
      ตอนใช้งานจริง หน้าเว็บจะส่งรหัสที่พิมพ์ไปให้ ADMIN_PASSWORD ใน gas/Code.gs ตรวจแทน ไม่เกี่ยวกับค่านี้ */
