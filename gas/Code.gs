@@ -2,7 +2,8 @@
  * หลังบ้านเว็บไซต์ "ข้อสอบ" — Google Apps Script
  *
  * รองรับ: สมัคร/ล็อกอินสมาชิก, สุ่มข้อสอบจากคลังใหญ่ + จับเวลา + ตรวจให้คะแนน,
- *          ฟอร์มติดต่อ (ส่งอีเมล), พื้นที่แสดงความเห็น
+ *          ฟอร์มติดต่อ (ส่งอีเมล), พื้นที่แสดงความเห็น,
+ *          หน้าแอดมิน (admin.html) สำหรับเพิ่ม/ลบข้อสอบพร้อมเฉลยเต็มในคลัง
  *
  * ⚠ ไฟล์นี้คือที่เก็บเฉลยข้อสอบ ห้ามคัดลอกคอลัมน์ "answer" ไปไว้ในหน้าเว็บเด็ดขาด
  *   หน้าเว็บขอชุดคำถามจากที่นี่ (ไม่มีเฉลยติดไปด้วย) แล้วส่งคำตอบกลับมาให้เซิร์ฟเวอร์ตรวจ
@@ -11,9 +12,10 @@
  *   1. สร้าง Google Sheet ใหม่ ตั้งชื่อ Sheet ตามหัวข้อ "โครงสร้างชีตที่ต้องมี" ด้านล่าง
  *   2. เปิด Extensions → Apps Script วางไฟล์นี้ทับ
  *   3. แก้ TOKEN ให้ตรงกับ APP.token ใน assets/site.js
- *   4. แก้ CONTACT_EMAIL เป็นอีเมลที่จะรับข้อความจากฟอร์มติดต่อ
- *   5. Deploy → New deployment → Web app → Execute as: Me / Who has access: Anyone
- *   6. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
+ *   4. แก้ ADMIN_PASSWORD เป็นรหัสผ่านของผู้ดูแลเว็บไซต์ (ใช้เข้าหน้า admin.html)
+ *   5. แก้ CONTACT_EMAIL เป็นอีเมลที่จะรับข้อความจากฟอร์มติดต่อ
+ *   6. Deploy → New deployment → Web app → Execute as: Me / Who has access: Anyone
+ *   7. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
  *
  * โครงสร้างชีตที่ต้องมี (สร้างเองใน Google Sheet เดียวกัน):
  *   Users     : timestamp | username | name | passHash
@@ -31,7 +33,8 @@
  *               note    : คำอธิบายเฉลย (ไม่บังคับ)
  */
 
-const TOKEN         = 'exam-bank-a217053bc9a2';  // ★ ต้องตรงกับ APP.token ใน assets/site.js
+const TOKEN          = 'exam-bank-a217053bc9a2';  // ★ ต้องตรงกับ APP.token ใน assets/site.js
+const ADMIN_PASSWORD = 'b31208d89d';              // ★ ต้องเปลี่ยนก่อนใช้งานจริง — รหัสผ่านเข้าหน้า admin.html
 const SHEET_ID       = '';                        // ★ เว้นว่างได้ถ้าผูกกับชีตอยู่แล้ว
 const CONTACT_EMAIL  = 'contact@example.com';     // ★ อีเมลที่จะรับข้อความจากฟอร์มติดต่อ
 const CACHE_SECONDS  = 7200;                       // อายุเซสชันข้อสอบ (วินาที) สูงสุด 21600
@@ -74,12 +77,16 @@ function doPost(e) {
     lock.waitLock(20000);
     try {
       switch (body.action) {
-        case 'register':    return json(register(body));
-        case 'login':       return json(login(body));
-        case 'contact':     return json(contact(body));
-        case 'feedback':    return json(feedback(body));
-        case 'submitExam':  return json(submitExam(body));
-        default:            return json({ ok: false, error: 'unknown action' });
+        case 'register':            return json(register(body));
+        case 'login':                return json(login(body));
+        case 'contact':              return json(contact(body));
+        case 'feedback':             return json(feedback(body));
+        case 'submitExam':           return json(submitExam(body));
+        case 'adminLogin':           return json(adminLogin(body));
+        case 'adminListQuestions':   return json(adminListQuestions(body));
+        case 'adminAddQuestion':     return json(adminAddQuestion(body));
+        case 'adminDeleteQuestion':  return json(adminDeleteQuestion(body));
+        default:                     return json({ ok: false, error: 'unknown action' });
       }
     } finally {
       lock.releaseLock();
@@ -224,6 +231,69 @@ function submitExam(body) {
   CacheService.getScriptCache().remove(body.sessionId);
 
   return { ok: true, score, total, percent, passed, detail };
+}
+
+/* ══════════════════════════ แอดมิน: จัดการคลังข้อสอบ ══════════════════════════ */
+/**
+ * ⚠ ระบบตรวจ ADMIN_PASSWORD ใหม่ทุกคำขอ (ไม่มีการออก session token)
+ *   ง่ายและพอเหมาะกับเว็บฝึกทำข้อสอบขนาดเล็ก แต่ไม่ใช่ระบบความปลอดภัยระดับองค์กร
+ *   อย่าใช้รหัสผ่านเดียวกับบัญชีอื่นที่สำคัญ และเปลี่ยน ADMIN_PASSWORD ก่อนใช้งานจริงเสมอ
+ */
+function requireAdmin_(body) {
+  return !!(body && body.adminPassword && body.adminPassword === ADMIN_PASSWORD);
+}
+
+function adminLogin(body) {
+  return requireAdmin_(body) ? { ok: true } : { ok: false, error: 'รหัสผ่านผู้ดูแลไม่ถูกต้อง' };
+}
+
+function adminListQuestions(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  return { ok: true, questions: readBank_(subject) };
+}
+
+function adminAddQuestion(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+
+  const subject = String(body.subject || '').slice(0, 50);
+  const type    = body.type === 'tf' ? 'tf' : 'mc';
+  const text    = clean(body.text);
+  const options = type === 'tf' ? [] : (Array.isArray(body.options) ? body.options.map(clean).filter(Boolean) : []);
+  const answer  = clean(body.answer);
+  const score   = Number(body.score) || 1;
+  const note    = clean(body.note);
+
+  if (!subject || !text || !answer) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+  if (type === 'mc' && options.length < 2) return { ok: false, error: 'ต้องมีตัวเลือกอย่างน้อย 2 ข้อ' };
+
+  const sh = sheet_('Q_' + subject, ['id', 'type', 'text', 'options', 'answer', 'score', 'note']);
+  const id = body.id && String(body.id).trim() ? String(body.id).trim() : 'q_' + Utilities.getUuid().slice(0, 8);
+
+  const rows = sh.getDataRange().getValues();
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === id) { rowIndex = i + 1; break; }
+  }
+
+  const rowData = [id, type, text, options.join('|'), answer, score, note];
+  if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  else sh.appendRow(rowData);
+
+  return { ok: true, id: id };
+}
+
+function adminDeleteQuestion(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const sh = ss_().getSheetByName('Q_' + subject);
+  if (!sh) return { ok: true };
+
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(body.id)) { sh.deleteRow(i + 1); break; }
+  }
+  return { ok: true };
 }
 
 /* ══════════════════════════ ยูทิลิตี ══════════════════════════ */

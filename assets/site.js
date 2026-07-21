@@ -15,7 +15,11 @@ window.APP = {
   facebook: "https://www.facebook.com/",   // ★ ใส่ลิงก์ Facebook Page จริง
   contactEmail: "contact@example.com",     // ★ อีเมลปลายทางฟอร์มติดต่อ (ตั้งใน Code.gs)
   contactName:  "วันชัย",
-  contactPhone: "066-000-0000"
+  contactPhone: "066-000-0000",
+
+  /* รหัสผ่านแอดมิน ใช้เฉพาะตอน demoMode = true เพื่อทดลองหน้า admin.html ในเครื่อง
+     ตอนใช้งานจริง หน้าเว็บจะส่งรหัสที่พิมพ์ไปให้ ADMIN_PASSWORD ใน gas/Code.gs ตรวจแทน ไม่เกี่ยวกับค่านี้ */
+  demoAdminPassword: "admin123"
 };
 
 const NAV = [
@@ -84,7 +88,7 @@ function renderFooter(){
       </div>
       <div class="foot-bottom">
         <span>&copy; ${new Date().getFullYear()} ${escHtml(APP.orgName)}</span>
-        <span>เว็บไซต์ตัวอย่าง อยู่ระหว่างจัดทำเนื้อหา</span>
+        <span>เว็บไซต์ตัวอย่าง อยู่ระหว่างจัดทำเนื้อหา · <a href="admin.html" style="color:inherit">สำหรับผู้ดูแลระบบ</a></span>
       </div>
     </footer>
   `);
@@ -119,6 +123,20 @@ async function sha256(text){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,"0")).join("");
 }
+
+function shuffleArr(a){
+  for (let i = a.length - 1; i > 0; i--){ const j = (Math.random()*(i+1))|0; [a[i],a[j]] = [a[j],a[i]]; }
+  return a;
+}
+function normStr(v){ return String(v == null ? "" : v).trim().toLowerCase().replace(/\s+/g," "); }
+
+/* โหมดตัวอย่าง: คลังข้อสอบที่แอดมินเพิ่มผ่าน admin.html เก็บไว้ต่อวิชาใน localStorage
+   ทำให้ทดลองทั้งขั้นตอน "แอดมินเพิ่มข้อสอบ → นักเรียนทำข้อสอบ → ตรวจจริง" ได้ก่อนต่อหลังบ้านจริง */
+function demoBankKey(subject){ return "examSiteDemoBank_" + subject; }
+function demoBankLoad(subject){
+  try { return JSON.parse(localStorage.getItem(demoBankKey(subject)) || "[]"); } catch(e){ return []; }
+}
+function demoBankSave(subject, list){ localStorage.setItem(demoBankKey(subject), JSON.stringify(list)); }
 
 async function apiCall(action, payload){
   if (APP.demoMode){
@@ -155,6 +173,35 @@ async function demoApi(action, payload){
   if (action === "contact") return { ok:true };
 
   if (action === "feedback") return { ok:true };
+
+  if (action === "adminLogin"){
+    return payload.adminPassword === APP.demoAdminPassword
+      ? { ok:true }
+      : { ok:false, error:"รหัสผ่านผู้ดูแลไม่ถูกต้อง (โหมดตัวอย่าง ลองใช้ " + APP.demoAdminPassword + ")" };
+  }
+
+  if (action === "adminListQuestions"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    return { ok:true, questions: demoBankLoad(payload.subject) };
+  }
+
+  if (action === "adminAddQuestion"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const list = demoBankLoad(payload.subject);
+    const id = payload.id || ("q_" + Date.now().toString(36));
+    const q = { id, type: payload.type, text: payload.text, options: payload.options,
+                answer: payload.answer, score: payload.score, note: payload.note };
+    const idx = list.findIndex(x => x.id === id);
+    if (idx >= 0) list[idx] = q; else list.push(q);
+    demoBankSave(payload.subject, list);
+    return { ok:true, id };
+  }
+
+  if (action === "adminDeleteQuestion"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    demoBankSave(payload.subject, demoBankLoad(payload.subject).filter(q => q.id !== payload.id));
+    return { ok:true };
+  }
 
   return { ok:false, error:"โหมดตัวอย่างไม่รองรับคำสั่งนี้" };
 }

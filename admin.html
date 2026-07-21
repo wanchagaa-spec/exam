@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>หน้าแอดมิน — จัดการคลังข้อสอบ</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .qrow{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:12px}
+  .qrow .top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .qrow .t{font-weight:600;margin-bottom:6px;line-height:1.5}
+  .qrow .opts{font-size:14px;color:var(--muted);margin:6px 0}
+  .qrow .ans{font-size:14px;color:var(--ok);font-weight:700}
+  .qrow .note{font-size:13.5px;color:var(--muted2);margin-top:4px}
+  .optrow{display:flex;gap:10px;align-items:center;margin-bottom:9px}
+  .optrow input[type=text]{flex:1;min-height:46px}
+  .optrow input[type=radio]{width:20px;height:20px;accent-color:var(--accent)}
+  .del{background:none;border:none;color:var(--danger);font-weight:700;cursor:pointer;font-size:14px;white-space:nowrap}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:20px}
+  .toolbar .field{margin-bottom:0;min-width:220px}
+</style>
+</head>
+<body>
+
+<main>
+  <section class="section" style="padding-top:56px">
+    <div class="wrap">
+
+      <!-- ── หน้ากรอกรหัสผ่าน ── -->
+      <div id="gate" class="narrow">
+        <div class="auth-card">
+          <h1>หน้าแอดมิน</h1>
+          <p class="sub">สำหรับผู้ดูแลเว็บไซต์เท่านั้น ใช้เพิ่ม/ลบข้อสอบพร้อมเฉลยในคลัง</p>
+          <div id="gateMsg"></div>
+          <form id="gateForm">
+            <div class="field">
+              <label for="pw">รหัสผ่านแอดมิน</label>
+              <input type="password" id="pw" autocomplete="current-password" required>
+            </div>
+            <button class="btn p block" type="submit">เข้าสู่ระบบ</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ── แผงจัดการคลังข้อสอบ ── -->
+      <div id="panel" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:10px">
+          <div>
+            <span class="eyebrow">หน้าแอดมิน</span>
+            <h1 style="margin-top:8px">จัดการคลังข้อสอบ</h1>
+          </div>
+          <button class="btn s" id="logoutBtn">ออกจากระบบแอดมิน</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="field">
+            <label for="subjectSel">เลือกวิชา</label>
+            <select id="subjectSel"></select>
+          </div>
+          <div class="muted" id="bankCount" style="padding-bottom:14px"></div>
+        </div>
+
+        <div class="grid c2" style="align-items:start">
+          <div class="card">
+            <h3 style="margin-bottom:16px">เพิ่มข้อสอบใหม่</h3>
+            <div id="addMsg"></div>
+            <form id="addForm">
+              <div class="field">
+                <label for="qType">ชนิดข้อสอบ</label>
+                <select id="qType">
+                  <option value="mc">ปรนัย (เลือกตอบ)</option>
+                  <option value="tf">ถูก / ผิด</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="qText">โจทย์ <span class="req">*</span></label>
+                <textarea id="qText" required placeholder="พิมพ์โจทย์ข้อสอบ"></textarea>
+              </div>
+
+              <div class="field" id="mcBlock">
+                <label>ตัวเลือก + เลือกข้อที่ถูกต้อง <span class="req">*</span></label>
+                <div id="optWrap"></div>
+                <p class="help">ติ๊กวงกลมหน้าช่องที่เป็นคำตอบที่ถูก กรอกอย่างน้อย 2 ตัวเลือก เว้นช่องที่ไม่ใช้ไว้ได้</p>
+              </div>
+
+              <div class="field hidden" id="tfBlock">
+                <label>คำตอบที่ถูกต้อง <span class="req">*</span></label>
+                <div class="optrow"><input type="radio" name="tfAns" value="ถูก" id="tfTrue"><label for="tfTrue">ถูก</label></div>
+                <div class="optrow"><input type="radio" name="tfAns" value="ผิด" id="tfFalse"><label for="tfFalse">ผิด</label></div>
+              </div>
+
+              <div class="field">
+                <label for="qScore">คะแนนข้อนี้</label>
+                <input type="number" id="qScore" value="1" min="1" style="max-width:120px">
+              </div>
+              <div class="field">
+                <label for="qNote">คำอธิบายเฉลย (ไม่บังคับ)</label>
+                <textarea id="qNote" placeholder="อธิบายว่าทำไมข้อนี้ถึงตอบแบบนี้ จะแสดงให้นักเรียนเห็นหลังส่งคำตอบ"></textarea>
+              </div>
+              <button class="btn p block" type="submit">เพิ่มข้อสอบนี้เข้าคลัง</button>
+            </form>
+          </div>
+
+          <div>
+            <h3 style="margin-bottom:16px">ข้อสอบในคลังของวิชานี้</h3>
+            <div id="qList"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+(function(){
+  "use strict";
+  const ADMIN_PASS_KEY = "examSiteAdminPass";
+  const LET = ["ก","ข","ค","ง"];
+
+  function adminPass(){ return sessionStorage.getItem(ADMIN_PASS_KEY) || ""; }
+  function setAdminPass(p){ sessionStorage.setItem(ADMIN_PASS_KEY, p); }
+  function clearAdminPass(){ sessionStorage.removeItem(ADMIN_PASS_KEY); }
+
+  renderHeader("admin.html");
+  renderFooter();
+
+  function showPanel(){
+    document.getElementById("gate").classList.add("hidden");
+    document.getElementById("panel").classList.remove("hidden");
+    initPanel();
+  }
+
+  document.getElementById("gateForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const pw = document.getElementById("pw").value;
+    const btn = e.target.querySelector("button");
+    btn.disabled = true; btn.textContent = "กำลังตรวจสอบ…";
+    const res = await apiCall("adminLogin", { adminPassword: pw });
+    if (res.ok){ setAdminPass(pw); showPanel(); }
+    else {
+      document.getElementById("gateMsg").innerHTML = `<div class="msg bad">${escHtml(res.error || "เข้าสู่ระบบไม่สำเร็จ")}</div>`;
+      btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
+    }
+  };
+
+  // ถ้ามีรหัสผ่านแอดมินค้างในเซสชันของแท็บนี้อยู่แล้ว ลองเข้าเลยโดยไม่ต้องพิมพ์ซ้ำ
+  (async function tryAutoLogin(){
+    if (!adminPass()) return;
+    const res = await apiCall("adminLogin", { adminPassword: adminPass() });
+    if (res.ok) showPanel(); else clearAdminPass();
+  })();
+
+  function initPanel(){
+    const sel = document.getElementById("subjectSel");
+    sel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+    sel.onchange = loadList;
+
+    document.getElementById("logoutBtn").onclick = () => { clearAdminPass(); location.reload(); };
+
+    buildOptInputs();
+    document.getElementById("qType").onchange = (e) => {
+      const isTf = e.target.value === "tf";
+      document.getElementById("mcBlock").classList.toggle("hidden", isTf);
+      document.getElementById("tfBlock").classList.toggle("hidden", !isTf);
+    };
+
+    document.getElementById("addForm").onsubmit = onAddSubmit;
+
+    loadList();
+  }
+
+  function buildOptInputs(){
+    const wrap = document.getElementById("optWrap");
+    wrap.innerHTML = LET.map((l, i) => `
+      <div class="optrow">
+        <input type="radio" name="mcCorrect" value="${i}" id="mcC${i}">
+        <input type="text" id="mcOpt${i}" placeholder="ตัวเลือก ${l}">
+      </div>
+    `).join("");
+  }
+
+  async function loadList(){
+    const subject = document.getElementById("subjectSel").value;
+    const box = document.getElementById("qList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("adminListQuestions", { adminPassword: adminPass(), subject });
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+
+    const list = res.questions || [];
+    document.getElementById("bankCount").textContent = "มีข้อสอบในคลังวิชานี้ทั้งหมด " + list.length + " ข้อ";
+
+    if (!list.length){
+      box.innerHTML = '<p class="muted">ยังไม่มีข้อสอบในคลังวิชานี้ เพิ่มข้อแรกได้จากฟอร์มด้านซ้าย</p>';
+      return;
+    }
+
+    box.innerHTML = list.map(q => `
+      <div class="qrow">
+        <div class="top">
+          <div style="flex:1">
+            <div class="t">${escHtml(q.text)}</div>
+            <div class="opts">${(q.options || []).map(o => escHtml(o)).join(" · ")}</div>
+            <div class="ans">เฉลย: ${escHtml(q.answer)} · ${q.score || 1} คะแนน</div>
+            ${q.note ? `<div class="note">${escHtml(q.note)}</div>` : ""}
+          </div>
+          <button class="del" data-id="${escHtml(q.id)}">ลบ</button>
+        </div>
+      </div>
+    `).join("");
+
+    box.querySelectorAll(".del").forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm("ลบข้อสอบข้อนี้ออกจากคลัง?")) return;
+        await apiCall("adminDeleteQuestion", { adminPassword: adminPass(), subject, id: btn.dataset.id });
+        loadList();
+      };
+    });
+  }
+
+  async function onAddSubmit(e){
+    e.preventDefault();
+    const subject = document.getElementById("subjectSel").value;
+    const type = document.getElementById("qType").value;
+    const text = document.getElementById("qText").value.trim();
+    const score = parseInt(document.getElementById("qScore").value, 10) || 1;
+    const note = document.getElementById("qNote").value.trim();
+    const msg = document.getElementById("addMsg");
+    msg.innerHTML = "";
+
+    let options = [], answer = "";
+    if (type === "mc"){
+      options = LET.map((_, i) => document.getElementById("mcOpt" + i).value.trim()).filter(Boolean);
+      const checked = document.querySelector('input[name=mcCorrect]:checked');
+      if (checked) answer = document.getElementById("mcOpt" + checked.value).value.trim();
+      if (options.length < 2){ msg.innerHTML = '<div class="msg bad">กรอกตัวเลือกอย่างน้อย 2 ข้อ</div>'; return; }
+      if (!answer){ msg.innerHTML = '<div class="msg bad">เลือกข้อที่เป็นคำตอบที่ถูกต้องด้วย</div>'; return; }
+    } else {
+      const checked = document.querySelector('input[name=tfAns]:checked');
+      if (!checked){ msg.innerHTML = '<div class="msg bad">เลือกว่าคำตอบที่ถูกคือ ถูก หรือ ผิด</div>'; return; }
+      answer = checked.value;
+      options = ["ถูก","ผิด"];
+    }
+    if (!text){ msg.innerHTML = '<div class="msg bad">กรอกโจทย์ก่อน</div>'; return; }
+
+    const btn = e.target.querySelector("button");
+    btn.disabled = true; btn.textContent = "กำลังเพิ่ม…";
+
+    const res = await apiCall("adminAddQuestion", {
+      adminPassword: adminPass(), subject, type, text, options, answer, score, note
+    });
+
+    if (res.ok){
+      msg.innerHTML = '<div class="msg ok">เพิ่มข้อสอบเรียบร้อยแล้ว</div>';
+      e.target.reset();
+      buildOptInputs();
+      document.getElementById("qType").dispatchEvent(new Event("change"));
+      loadList();
+    } else {
+      msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "เพิ่มไม่สำเร็จ")}</div>`;
+    }
+    btn.disabled = false; btn.textContent = "เพิ่มข้อสอบนี้เข้าคลัง";
+  }
+})();
+</script>
+</body>
+</html>

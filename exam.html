@@ -109,7 +109,7 @@
   const esc = escHtml;
   const LET = ["ก","ข","ค","ง","จ","ฉ"];
 
-  let questions = [], sessionId = null, left = 0, timer = null, sent = false;
+  let questions = [], sessionId = null, left = 0, timer = null, sent = false, demoAnswerKey = null;
   const ans = {};
 
   app.innerHTML = `
@@ -138,7 +138,16 @@
     btn.disabled = true; btn.textContent = "กำลังเตรียมข้อสอบ…";
 
     if (APP.demoMode){
-      questions = genDemoQuestions(subject);
+      const bank = demoBankLoad(subject.slug);
+      if (bank.length){
+        const chosen = shuffleArr(bank.slice()).slice(0, Math.min(subject.draw, bank.length));
+        demoAnswerKey = {};
+        chosen.forEach(q => { demoAnswerKey[q.id] = { answer: q.answer, score: q.score || 1, note: q.note || "" }; });
+        questions = chosen.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options }));
+      } else {
+        questions = genDemoQuestions(subject);
+        demoAnswerKey = null;
+      }
       sessionId = "demo";
     } else {
       try {
@@ -295,12 +304,29 @@
     if (APP.demoMode){
       await new Promise(r => setTimeout(r, 700));
       const detail = {};
-      questions.forEach((q,i) => {
-        detail[q.id] = { correct: i % 3 !== 0, answer: "(โหมดตัวอย่างไม่มีเฉลยจริง)", note: "โหมดตัวอย่าง ยังไม่ได้เชื่อมระบบตรวจจริง" };
-      });
-      const score = Math.round(questions.length * 0.7);
-      render({ ok:true, score, total: questions.length, percent: Math.round(score/questions.length*100),
-               passed: score/questions.length*100 >= PASS_PERCENT, detail });
+      let score = 0, total = 0;
+
+      if (demoAnswerKey){
+        // มีข้อสอบจริงที่แอดมินเพิ่มไว้ผ่าน admin.html — ตรวจให้คะแนนจริงในเครื่อง
+        questions.forEach(q => {
+          const k = demoAnswerKey[q.id];
+          const pt = k.score || 1;
+          total += pt;
+          const right = normStr(ans[q.id]) === normStr(k.answer);
+          if (right) score += pt;
+          detail[q.id] = { correct: right, answer: k.answer, note: k.note || "" };
+        });
+      } else {
+        // ยังไม่มีข้อสอบจริงในคลัง — จำลองผลให้ดูหน้าตาเท่านั้น
+        questions.forEach((q,i) => {
+          detail[q.id] = { correct: i % 3 !== 0, answer: "(โหมดตัวอย่างไม่มีเฉลยจริง — เพิ่มข้อสอบผ่านหน้าแอดมินก่อน)", note: "โหมดตัวอย่าง ยังไม่ได้เชื่อมระบบตรวจจริง" };
+        });
+        total = questions.length;
+        score = Math.round(questions.length * 0.7);
+      }
+
+      const percent = total ? Math.round(score/total*100) : 0;
+      render({ ok:true, score, total, percent, passed: percent >= PASS_PERCENT, detail });
       return;
     }
 
