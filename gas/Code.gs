@@ -21,8 +21,9 @@
  *   Users      : timestamp | email | name | age | school | passHash | avatar
  *               ── ล็อกอินด้วยอีเมล (ไม่มี username แล้ว), avatar = data URL รูปย่อขนาดแล้วจากฝั่งเว็บ (เก็บตรงในเซลล์)
  *   Contact    : timestamp | name | email | message
- *   Posts      : id | timestamp | email | name | subject | text | likeCount
+ *   Posts      : id | timestamp | email | name | subject | text | likeCount | commentCount
  *               ── โพสของบอร์ดความคิดเห็น (แสดงในหน้า news.html) subject ต้องตรงกับ slug ใน assets/demo-data.js
+ *                  likeCount/commentCount เก็บตัวเลขสรุปตรงในแถวเลย ไม่ต้องนับจากชีต Likes/Comments ทุกครั้งที่โหลดฟีด
  *   Likes      : postId | email
  *               ── 1 แถวต่อ 1 คนที่กดถูกใจ 1 โพส (ใช้เช็คว่าคนนี้เคยกดหรือยัง และลบแถวเมื่อกดยกเลิก)
  *   Comments   : id | postId | timestamp | email | name | text
@@ -224,7 +225,9 @@ function contact(body) {
 }
 
 /* ══════════════════════════ บอร์ดความคิดเห็น (โพส/ถูกใจ/คอมเมนต์) ══════════════════════════ */
-function postsSheet_()    { return sheet_('Posts', ['id', 'timestamp', 'email', 'name', 'subject', 'text', 'likeCount']); }
+/** commentCount เก็บตรงในแถวโพสต์เลย (เหมือน likeCount) กันไม่ต้องสแกนทั้งชีต Comments ทุกครั้งที่ดึงฟีด
+    คอลัมน์ใหม่ต่อท้ายชีตเดิม แถวเก่าที่ยังไม่มีค่านี้จะอ่านได้ค่าว่าง ตีความเป็น 0 ให้อัตโนมัติ ไม่ต้อง migrate */
+function postsSheet_()    { return sheet_('Posts', ['id', 'timestamp', 'email', 'name', 'subject', 'text', 'likeCount', 'commentCount']); }
 function likesSheet_()    { return sheet_('Likes', ['postId', 'email']); }
 function commentsSheet_() { return sheet_('Comments', ['id', 'postId', 'timestamp', 'email', 'name', 'text']); }
 
@@ -237,7 +240,7 @@ function createPost(body) {
 
   const id = 'p_' + Utilities.getUuid().slice(0, 10);
   const timestamp = new Date();
-  postsSheet_().appendRow([id, timestamp, email, name, subject, text, 0]);
+  postsSheet_().appendRow([id, timestamp, email, name, subject, text, 0, 0]);
   return { ok: true, post: { id, timestamp: timestamp.toISOString(), email, name, subject, text, likeCount: 0, commentCount: 0, likedByMe: false } };
 }
 
@@ -248,11 +251,6 @@ function listPosts(body) {
   const viewerEmail = String(body.viewerEmail || '').trim().toLowerCase();
 
   const rows = postsSheet_().getDataRange().getValues();
-  const commentCounts = {};
-  commentsSheet_().getDataRange().getValues().slice(1).forEach(r => {
-    if (!r[1]) return;
-    commentCounts[r[1]] = (commentCounts[r[1]] || 0) + 1;
-  });
   const likedSet = new Set();
   if (viewerEmail) {
     likesSheet_().getDataRange().getValues().slice(1).forEach(r => {
@@ -274,7 +272,7 @@ function listPosts(body) {
       subject: String(r[4] || ''),
       text: String(r[5] || ''),
       likeCount: Number(r[6]) || 0,
-      commentCount: commentCounts[String(r[0])] || 0,
+      commentCount: Number(r[7]) || 0,
       likedByMe: likedSet.has(String(r[0]))
     });
   }
@@ -284,6 +282,22 @@ function listPosts(body) {
     : (new Date(b.timestamp) - new Date(a.timestamp)));
 
   return { ok: true, posts };
+}
+
+/** หาแถวของโพสต์จาก id คืน { sheet, rowIndex (1-based), row } หรือ null ถ้าไม่เจอ */
+function findPostRow_(postId) {
+  const sh = postsSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === postId) return { sheet: sh, rowIndex: i + 1, row: rows[i] };
+  }
+  return null;
+}
+
+/** ปรับ commentCount ของแถวโพสต์ที่หาไว้แล้ว (จาก findPostRow_) ไม่อ่านชีตซ้ำ */
+function bumpCommentCount_(found, delta) {
+  const current = Number(found.row[7]) || 0;
+  found.sheet.getRange(found.rowIndex, 8).setValue(Math.max(0, current + delta));
 }
 
 /** ลบโพสต์ (เจ้าของเท่านั้น) พร้อมล้างคอมเมนต์/ถูกใจของโพสต์นั้นทิ้งด้วย */
@@ -328,7 +342,10 @@ function deleteComment(body) {
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === commentId) {
       if (String(rows[i][3]).toLowerCase() !== email) return { ok: false, error: 'ลบได้เฉพาะความคิดเห็นของตัวเอง' };
+      const postId = String(rows[i][1]);
       sh.deleteRow(i + 1);
+      const found = findPostRow_(postId);
+      if (found) bumpCommentCount_(found, -1);
       return { ok: true };
     }
   }
@@ -347,16 +364,11 @@ function toggleLike(body) {
     if (String(likeRows[i][0]) === postId && String(likeRows[i][1]).toLowerCase() === email) { likeRowIndex = i + 1; break; }
   }
 
-  const postSh = postsSheet_();
-  const postRows = postSh.getDataRange().getValues();
-  let postRowIndex = -1;
-  for (let i = 1; i < postRows.length; i++) {
-    if (String(postRows[i][0]) === postId) { postRowIndex = i + 1; break; }
-  }
-  if (postRowIndex < 0) return { ok: false, error: 'ไม่พบโพสต์นี้' };
+  const found = findPostRow_(postId);
+  if (!found) return { ok: false, error: 'ไม่พบโพสต์นี้' };
 
-  const currentCount = Number(postRows[postRowIndex - 1][6]) || 0;
-  const postOwnerEmail = String(postRows[postRowIndex - 1][2] || '').toLowerCase();
+  const currentCount = Number(found.row[6]) || 0;
+  const postOwnerEmail = String(found.row[2] || '').toLowerCase();
   let liked, newCount;
   if (likeRowIndex > 0) {
     likeSh.deleteRow(likeRowIndex);
@@ -370,7 +382,7 @@ function toggleLike(body) {
       notify_(postOwnerEmail, 'like', postId, body.name || email);
     }
   }
-  postSh.getRange(postRowIndex, 7).setValue(newCount);
+  found.sheet.getRange(found.rowIndex, 7).setValue(newCount);
 
   return { ok: true, liked, likeCount: newCount };
 }
@@ -386,11 +398,13 @@ function addComment(body) {
   const timestamp = new Date();
   commentsSheet_().appendRow([id, postId, timestamp, email, name, text]);
 
-  const postRows = postsSheet_().getDataRange().getValues();
-  const postRow = postRows.find(r => String(r[0]) === postId);
-  const postOwnerEmail = postRow ? String(postRow[2] || '').toLowerCase() : '';
-  if (postOwnerEmail && postOwnerEmail !== email) {
-    notify_(postOwnerEmail, 'comment', postId, name);
+  const found = findPostRow_(postId);
+  if (found) {
+    bumpCommentCount_(found, 1);
+    const postOwnerEmail = String(found.row[2] || '').toLowerCase();
+    if (postOwnerEmail && postOwnerEmail !== email) {
+      notify_(postOwnerEmail, 'comment', postId, name);
+    }
   }
 
   return { ok: true, comment: { id, timestamp: timestamp.toISOString(), email, name, text } };

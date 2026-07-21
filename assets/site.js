@@ -467,6 +467,10 @@ function createPostBoard(options){
     else expanded.delete(id);
   }
 
+  function updateCmtToggle(card){
+    card.querySelector(".cmtToggle").textContent = `💬 ความคิดเห็น (${(commentsCache[card.dataset.id] || []).length})`;
+  }
+
   async function renderComments(id, card){
     const box = card.querySelector(".commentList");
     box.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังโหลด…</p>';
@@ -489,7 +493,7 @@ function createPostBoard(options){
       btn.onclick = async () => {
         const commentId = btn.closest(".comment").dataset.id;
         const res2 = await apiCall("deleteComment", { commentId, email: user.email });
-        if (res2.ok) renderComments(id, card);
+        if (res2.ok){ await renderComments(id, card); updateCmtToggle(card); }
       };
     });
   }
@@ -505,9 +509,8 @@ function createPostBoard(options){
     btn.disabled = false;
     if (!res.ok) return;
     input.value = "";
-    renderComments(id, card);
-    const cmtBtn = card.querySelector(".cmtToggle");
-    cmtBtn.textContent = `💬 ความคิดเห็น (${(commentsCache[id] || []).length})`;
+    await renderComments(id, card);
+    updateCmtToggle(card);
   }
 
   async function onDeletePost(id){
