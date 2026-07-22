@@ -67,6 +67,8 @@
           <button class="btn s" id="logoutBtn">ออกจากระบบแอดมิน</button>
         </div>
 
+        <div id="adminNavBox"></div>
+
         <div class="toolbar">
           <div class="field">
             <label for="subjectSel">เลือกวิชา</label>
@@ -78,12 +80,11 @@
         <div style="display:flex;gap:8px;margin-bottom:22px;border-bottom:1px solid var(--line);padding-bottom:0;flex-wrap:wrap">
           <button class="btn s" id="tabBtnBank" style="border-radius:10px 10px 0 0;border-bottom:none">คลังข้อสอบ</button>
           <button class="btn s" id="tabBtnBlueprint" style="border-radius:10px 10px 0 0;border-bottom:none;background:transparent">โครงสร้างชุดข้อสอบ</button>
-          <button class="btn s" id="tabBtnImport" style="border-radius:10px 10px 0 0;border-bottom:none;background:transparent">นำเข้าข้อมูล (JSON)</button>
         </div>
 
         <div id="tabBank">
           <h3 style="margin-bottom:16px">ข้อสอบในคลังของวิชานี้</h3>
-          <p class="muted" style="margin-bottom:16px">เพิ่มข้อสอบใหม่ผ่านแท็บ "นำเข้าข้อมูล (JSON)" — ลบรายข้อทำได้จากรายการด้านล่าง</p>
+          <p class="muted" style="margin-bottom:16px">เพิ่มข้อสอบใหม่ได้ที่หน้า "เพิ่มทีละข้อ" หรือ "นำเข้าหลายข้อ (JSON)" ด้านบน — ลบรายข้อทำได้จากรายการด้านล่าง</p>
           <div id="qList"></div>
         </div>
 
@@ -112,36 +113,6 @@
         </div>
       </div>
 
-      <div id="tabImport" class="hidden">
-        <div class="card" style="margin-bottom:20px">
-          <h3 style="margin-bottom:6px">อัปโหลดรูปประกอบโจทย์</h3>
-          <p class="muted" style="margin-bottom:16px">
-            เลือกรูป ระบบจะย่อขนาดและอัปโหลดขึ้น Google Drive ให้อัตโนมัติ ได้ข้อความอ้างอิงกลับมาเป็น
-            <code>![alt](url)</code> — คัดลอกไปวางในตำแหน่งที่ต้องการภายใน <code>text</code> หรือ <code>note</code> ของ JSON ด้านล่างได้เลย
-          </p>
-          <div id="imgUploadMsg"></div>
-          <input type="file" id="imgUploadInput" accept="image/*" class="hidden">
-          <button class="btn s" id="imgUploadBtn" type="button">เลือกรูป…</button>
-          <div id="imgUploadResult" style="margin-top:14px"></div>
-        </div>
-
-        <div class="card">
-          <h3 style="margin-bottom:6px">นำเข้าข้อมูล (JSON)</h3>
-          <p class="muted" style="margin-bottom:16px">
-            วางข้อมูลเป็น JSON array แล้วกดนำเข้า ระบบจะเพิ่มทีละข้อเข้าคลังของ "วิชาที่เลือกไว้ด้านบน"
-            แต่ละข้อเป็น object: <code>{ "type":"mc|tf|fill", "strand":"ชื่อสาระ", "text":"โจทย์", "options":["..."], "answer":"...", "score":3, "note":"คำอธิบายเฉลย" }</code>
-            — <code>strand</code> ต้องตรงกับชื่อในลิสต์สาระของวิชานั้นเป๊ะ ๆ, type <code>fill</code> ไม่ต้องมี <code>options</code> และใส่คำตอบที่ยอมรับได้หลายแบบใน <code>answer</code> คั่นด้วย <code>|</code>
-          </p>
-          <div id="importMsg"></div>
-          <div class="field">
-            <label for="importJson">ข้อมูล JSON</label>
-            <textarea id="importJson" rows="10" placeholder='[{"type":"mc","strand":"...","text":"...","options":["...","..."],"answer":"...","score":3,"note":"..."}]' style="min-height:220px;font-family:monospace;font-size:13.5px"></textarea>
-          </div>
-          <button class="btn p" id="importBtn" type="button">นำเข้าทั้งหมด</button>
-          <div id="importResult" style="margin-top:14px"></div>
-        </div>
-      </div>
-
     </div>
   </section>
 </main>
@@ -151,13 +122,8 @@
 <script>
 (function(){
   "use strict";
-  const ADMIN_PASS_KEY = "examSiteAdminPass";
   let sectionCounter = 0;
   let bankCountByStrand = {};
-
-  function adminPass(){ return sessionStorage.getItem(ADMIN_PASS_KEY) || ""; }
-  function setAdminPass(p){ sessionStorage.setItem(ADMIN_PASS_KEY, p); }
-  function clearAdminPass(){ sessionStorage.removeItem(ADMIN_PASS_KEY); }
 
   renderHeader("admin.html");
   renderFooter();
@@ -189,9 +155,15 @@
   })();
 
   function initPanel(){
+    document.getElementById("adminNavBox").innerHTML = adminNavHtml("admin");
+
     const sel = document.getElementById("subjectSel");
     sel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+    const params = new URLSearchParams(location.search);
+    if (params.get("subject") && SUBJECTS.some(s => s.slug === params.get("subject"))) sel.value = params.get("subject");
+    adminNavSyncSubject(sel.value);
     sel.onchange = () => {
+      adminNavSyncSubject(sel.value);
       loadList();
       if (!document.getElementById("tabBlueprint").classList.contains("hidden")) loadBlueprint();
     };
@@ -200,10 +172,6 @@
 
     document.getElementById("tabBtnBank").onclick = () => switchTab("bank");
     document.getElementById("tabBtnBlueprint").onclick = () => switchTab("blueprint");
-    document.getElementById("tabBtnImport").onclick = () => switchTab("import");
-    document.getElementById("importBtn").onclick = onBulkImport;
-    document.getElementById("imgUploadBtn").onclick = () => document.getElementById("imgUploadInput").click();
-    document.getElementById("imgUploadInput").onchange = onImageUpload;
 
     document.getElementById("addSectionBtn").onclick = () => { addSectionRow(); updateBlueprintTotal(); };
     document.getElementById("saveBlueprintBtn").onclick = onSaveConfig;
@@ -216,8 +184,7 @@
   function switchTab(which){
     document.getElementById("tabBank").classList.toggle("hidden", which !== "bank");
     document.getElementById("tabBlueprint").classList.toggle("hidden", which !== "blueprint");
-    document.getElementById("tabImport").classList.toggle("hidden", which !== "import");
-    ["Bank","Blueprint","Import"].forEach(name => {
+    ["Bank","Blueprint"].forEach(name => {
       const on = which === name.toLowerCase();
       const btn = document.getElementById("tabBtn" + name);
       btn.classList.toggle("on", on);
@@ -241,7 +208,7 @@
     document.getElementById("bankCount").textContent = "มีข้อสอบในคลังวิชานี้ทั้งหมด " + list.length + " ข้อ";
 
     if (!list.length){
-      box.innerHTML = '<p class="muted">ยังไม่มีข้อสอบในคลังวิชานี้ เพิ่มข้อแรกได้ที่แท็บ "นำเข้าข้อมูล (JSON)"</p>';
+      box.innerHTML = '<p class="muted">ยังไม่มีข้อสอบในคลังวิชานี้ เพิ่มข้อแรกได้ที่หน้า "เพิ่มทีละข้อ" หรือ "นำเข้าหลายข้อ (JSON)" ด้านบน</p>';
       return;
     }
 
@@ -276,42 +243,6 @@
 
     renderMath(box);
     renderImages(box);
-  }
-
-  /* ── อัปโหลดรูปประกอบโจทย์ขึ้น Google Drive ── */
-  async function onImageUpload(e){
-    const file = e.target.files[0];
-    if (!file) return;
-    const msg = document.getElementById("imgUploadMsg");
-    const result = document.getElementById("imgUploadResult");
-    result.innerHTML = "";
-    msg.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังอัปโหลด…</p>';
-    try {
-      const dataUrl = await resizeImageToDataUrlFit(file, 1000);
-      const res = await apiCall("uploadQuestionImage", { adminPassword: adminPass(), dataUrl, filename: file.name });
-      if (res.ok){
-        const snippet = `![รูปประกอบ](${res.url})`;
-        msg.innerHTML = '<div class="msg ok">อัปโหลดสำเร็จ คัดลอกข้อความด้านล่างไปวางในตำแหน่งที่ต้องการ</div>';
-        result.innerHTML = `
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <code id="imgSnippet" style="background:var(--card-hi);padding:8px 12px;border-radius:8px;font-size:13.5px;word-break:break-all">${escHtml(snippet)}</code>
-            <button class="btn s" id="imgCopyBtn" type="button">คัดลอก</button>
-          </div>
-          <img src="${res.url}" alt="" style="max-width:220px;border-radius:var(--r);margin-top:10px;display:block">
-        `;
-        document.getElementById("imgCopyBtn").onclick = () => {
-          navigator.clipboard.writeText(snippet);
-          const copyBtn = document.getElementById("imgCopyBtn");
-          copyBtn.textContent = "คัดลอกแล้ว";
-          setTimeout(() => { copyBtn.textContent = "คัดลอก"; }, 1500);
-        };
-      } else {
-        msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "อัปโหลดไม่สำเร็จ")}</div>`;
-      }
-    } catch (err) {
-      msg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
-    }
-    e.target.value = "";
   }
 
   /* ── โครงสร้างชุดข้อสอบ (Blueprint) — วิชาหนึ่งมีได้หลายชุด เลือกได้ว่าชุดไหน active ── */
@@ -488,52 +419,6 @@
     loadBlueprint();
   }
 
-  /* ── นำเข้าข้อสอบหลายข้อจาก JSON ── */
-  async function onBulkImport(){
-    const subject = document.getElementById("subjectSel").value;
-    const raw = document.getElementById("importJson").value.trim();
-    const out = document.getElementById("importResult");
-    const msg = document.getElementById("importMsg");
-    out.innerHTML = ""; msg.innerHTML = "";
-
-    let items;
-    try {
-      items = JSON.parse(raw);
-      if (!Array.isArray(items)) throw new Error("ข้อมูลต้องเป็น JSON array ([...])");
-    } catch (e) {
-      msg.innerHTML = `<div class="msg bad">อ่าน JSON ไม่ได้: ${escHtml(e.message)}</div>`;
-      return;
-    }
-    if (!items.length){ msg.innerHTML = '<div class="msg bad">ไม่มีข้อมูลให้นำเข้า</div>'; return; }
-
-    const btn = document.getElementById("importBtn");
-    btn.disabled = true;
-    let ok = 0;
-    const fails = [];
-
-    for (let i = 0; i < items.length; i++){
-      btn.textContent = `กำลังนำเข้า… (${i + 1}/${items.length})`;
-      const q = items[i] || {};
-      const res = await apiCall("adminAddQuestion", {
-        adminPassword: adminPass(), subject,
-        type: q.type, strand: q.strand, text: q.text,
-        options: q.options || [], answer: q.answer,
-        score: q.score || 1, note: q.note || ""
-      });
-      if (res.ok) ok++;
-      else fails.push("ข้อที่ " + (i + 1) + ": " + (res.error || "ไม่ทราบสาเหตุ"));
-    }
-
-    btn.disabled = false;
-    btn.textContent = "นำเข้าทั้งหมด";
-    out.innerHTML = `<div class="msg ${fails.length ? "bad" : "ok"}">นำเข้าสำเร็จ ${ok} ข้อ จากทั้งหมด ${items.length} ข้อ ส่งเข้า Google Sheets เรียบร้อยแล้ว` +
-      (fails.length ? ` (ล้มเหลว ${fails.length} ข้อ — แก้ไขแล้วนำเข้าใหม่ได้)` : "") + "</div>" +
-      (fails.length ? '<ul style="margin-top:8px;font-size:13.5px;color:var(--danger);padding-left:20px">' +
-        fails.map(f => `<li>${escHtml(f)}</li>`).join("") + "</ul>" : "");
-
-    if (!fails.length) document.getElementById("importJson").value = "";
-    loadList();
-  }
 })();
 </script>
 </body>

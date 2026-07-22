@@ -327,6 +327,41 @@ function requireLogin(){
   return true;
 }
 
+/* ── หน้าแอดมิน: รหัสผ่านเก็บใน sessionStorage ของแท็บนี้ ใช้ร่วมกันได้ทุกหน้าแอดมิน ── */
+const ADMIN_PASS_KEY = "examSiteAdminPass";
+function adminPass(){ return sessionStorage.getItem(ADMIN_PASS_KEY) || ""; }
+function setAdminPass(p){ sessionStorage.setItem(ADMIN_PASS_KEY, p); }
+function clearAdminPass(){ sessionStorage.removeItem(ADMIN_PASS_KEY); }
+
+/** ใช้ในหน้าแอดมินย่อยที่ไม่มีฟอร์มกรอกรหัสผ่านเอง (admin-add.html, admin-import.html)
+    ตรวจรหัสผ่านที่ค้างไว้กับเซิร์ฟเวอร์ก่อน ผ่านแล้วเรียก onReady() — ไม่ผ่าน/ไม่มีรหัสผ่านค้างไว้เลย ให้เด้งกลับไปกรอกที่ admin.html */
+async function requireAdminSession(onReady){
+  const pw = adminPass();
+  if (!pw){ location.href = "admin.html"; return; }
+  const res = await apiCall("adminLogin", { adminPassword: pw });
+  if (!res.ok){ clearAdminPass(); location.href = "admin.html"; return; }
+  onReady();
+}
+
+/** แถบลิงก์สลับไปมาระหว่าง 3 หน้าแอดมิน (คลังข้อสอบ/โครงสร้าง, เพิ่มทีละข้อ, นำเข้าหลายข้อ) */
+function adminNavHtml(active){
+  const items = [
+    { href: "admin.html", label: "📚 คลังข้อสอบ / โครงสร้าง", key: "admin" },
+    { href: "admin-add.html", label: "➕ เพิ่มทีละข้อ", key: "add" },
+    { href: "admin-import.html", label: "📥 นำเข้าหลายข้อ (JSON)", key: "import" }
+  ];
+  return `<div class="adminnav">` + items.map(it =>
+    `<a class="btn ${it.key === active ? "p" : "s"}" href="${it.href}" data-adminnav="${it.key}">${it.label}</a>`
+  ).join("") + `</div>`;
+}
+/** อัปเดต href ของแถบลิงก์แอดมินให้พกวิชาที่เลือกอยู่ไปด้วย เวลาสลับหน้า */
+function adminNavSyncSubject(subjectSlug){
+  document.querySelectorAll("[data-adminnav]").forEach(a => {
+    const base = a.getAttribute("href").split("?")[0];
+    a.href = base + "?subject=" + encodeURIComponent(subjectSlug);
+  });
+}
+
 /* โหมดตัวอย่าง: จำลองบัญชีผู้ใช้ในเครื่อง (ไม่ใช่ระบบสมาชิกจริง) */
 function demoUsers(){
   try { return JSON.parse(localStorage.getItem(USERS_KEY) || "[]"); } catch(e){ return []; }

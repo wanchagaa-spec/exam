@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เพิ่มข้อสอบทีละข้อ — หน้าแอดมิน</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:20px}
+  .toolbar .field{margin-bottom:0;min-width:220px}
+  .optrow{display:flex;gap:10px;align-items:center;margin-bottom:9px}
+  .optrow .optn{flex:none;width:26px;font-weight:700;color:var(--muted2)}
+  .optrow input{flex:1}
+  .optrow .del{flex:none}
+  .imgAttachBox{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
+  .imgAttachBox img{max-width:140px;max-height:100px;border-radius:var(--r);display:block}
+  .counterTag{font-weight:700;color:var(--ok)}
+</style>
+</head>
+<body>
+
+<main>
+  <section class="section" style="padding-top:56px">
+    <div class="wrap">
+      <div id="panel" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:10px">
+          <div>
+            <span class="eyebrow">หน้าแอดมิน</span>
+            <h1 style="margin-top:8px">เพิ่มข้อสอบทีละข้อ</h1>
+          </div>
+          <button class="btn s" id="logoutBtn">ออกจากระบบแอดมิน</button>
+        </div>
+
+        <div id="adminNavBox"></div>
+
+        <div class="toolbar">
+          <div class="field">
+            <label for="subjectSel">เลือกวิชา</label>
+            <select id="subjectSel"></select>
+          </div>
+          <div class="muted" id="sessionCount" style="padding-bottom:14px"></div>
+        </div>
+
+        <div class="card">
+          <div id="addMsg"></div>
+          <form id="addForm">
+            <div class="field">
+              <label for="typeSel">ประเภทข้อ</label>
+              <select id="typeSel">
+                <option value="mc">ปรนัย (เลือกตอบ)</option>
+                <option value="tf">ถูก/ผิด</option>
+                <option value="fill">เติมคำตอบ</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="strandSel">สาระ/หมวดเนื้อหา</label>
+              <select id="strandSel" required></select>
+            </div>
+
+            <div class="field">
+              <label for="textInput">โจทย์ <span class="req">*</span></label>
+              <textarea id="textInput" rows="4" required placeholder="พิมพ์โจทย์ที่นี่ — ใส่สมการแบบ LaTeX คร่อมด้วย $...$ ได้"></textarea>
+            </div>
+
+            <div class="imgAttachBox">
+              <div style="flex:1;min-width:200px">
+                <div class="muted" style="font-size:13.5px;margin-bottom:8px">แนบรูปประกอบโจทย์นี้ (ถ้ามี) — อัปโหลดแล้วระบบจะแทรกลงท้ายโจทย์ให้อัตโนมัติ</div>
+                <div id="imgUploadMsg"></div>
+                <input type="file" id="imgUploadInput" accept="image/*" class="hidden">
+                <button class="btn s" id="imgUploadBtn" type="button">📷 เลือกรูป…</button>
+              </div>
+              <img id="imgUploadPreview" class="hidden" alt="">
+            </div>
+
+            <div class="field" id="optionsField">
+              <label>ตัวเลือก (ปรนัย)</label>
+              <div id="optionsWrap"></div>
+              <button class="btn s" id="addOptionBtn" type="button" style="margin-top:4px">+ เพิ่มตัวเลือก</button>
+            </div>
+
+            <div class="field" id="answerFieldMc">
+              <label for="answerSelectMc">เฉลย</label>
+              <select id="answerSelectMc"></select>
+            </div>
+            <div class="field hidden" id="answerFieldTf">
+              <label for="answerSelectTf">เฉลย</label>
+              <select id="answerSelectTf">
+                <option value="ถูก">ถูก</option>
+                <option value="ผิด">ผิด</option>
+              </select>
+            </div>
+            <div class="field hidden" id="answerFieldFill">
+              <label for="answerInputFill">เฉลย</label>
+              <input type="text" id="answerInputFill" placeholder="ใส่คำตอบที่ยอมรับได้หลายแบบ คั่นด้วย | เช่น 10|๑๐|สิบ">
+            </div>
+
+            <div class="field" style="max-width:160px">
+              <label for="scoreInput">คะแนน</label>
+              <input type="number" id="scoreInput" min="1" value="1" required>
+            </div>
+
+            <div class="field">
+              <label for="noteInput">คำอธิบายเฉลย (ถ้ามี)</label>
+              <textarea id="noteInput" rows="2" placeholder="เหตุผล/วิธีคิด แสดงให้นักเรียนเห็นหลังส่งคำตอบ"></textarea>
+            </div>
+
+            <button class="btn p block" type="submit">เพิ่มข้อสอบ</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+(function(){
+  "use strict";
+  const LET = ["ก","ข","ค","ง","จ","ฉ"];
+  let sessionCount = 0;
+  let attachedImageUrl = "";
+
+  renderHeader("admin.html");
+  renderFooter();
+
+  document.getElementById("logoutBtn").onclick = () => { clearAdminPass(); location.href = "admin.html"; };
+
+  requireAdminSession(initPanel);
+
+  function initPanel(){
+    document.getElementById("panel").classList.remove("hidden");
+    document.getElementById("adminNavBox").innerHTML = adminNavHtml("add");
+
+    const sel = document.getElementById("subjectSel");
+    sel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+    const params = new URLSearchParams(location.search);
+    if (params.get("subject") && SUBJECTS.some(s => s.slug === params.get("subject"))) sel.value = params.get("subject");
+    adminNavSyncSubject(sel.value);
+    sel.onchange = () => { adminNavSyncSubject(sel.value); refreshStrands(); };
+
+    refreshStrands();
+    updateSessionCount();
+
+    document.getElementById("typeSel").onchange = onTypeChange;
+    document.getElementById("addOptionBtn").onclick = () => { addOptionRow(); refreshAnswerOptions(); };
+    document.getElementById("imgUploadBtn").onclick = () => document.getElementById("imgUploadInput").click();
+    document.getElementById("imgUploadInput").onchange = onImageUpload;
+    document.getElementById("addForm").onsubmit = onSubmit;
+
+    document.getElementById("optionsWrap").innerHTML = "";
+    addOptionRow(); addOptionRow();
+    onTypeChange();
+  }
+
+  function refreshStrands(){
+    const subject = document.getElementById("subjectSel").value;
+    const strands = SUBJECT_STRANDS[subject] || [];
+    document.getElementById("strandSel").innerHTML = strands.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("");
+  }
+
+  function updateSessionCount(){
+    document.getElementById("sessionCount").textContent = sessionCount
+      ? `เพิ่มไปแล้ว ${sessionCount} ข้อในเซสชันนี้`
+      : "";
+  }
+
+  function onTypeChange(){
+    const type = document.getElementById("typeSel").value;
+    document.getElementById("optionsField").classList.toggle("hidden", type !== "mc");
+    document.getElementById("answerFieldMc").classList.toggle("hidden", type !== "mc");
+    document.getElementById("answerFieldTf").classList.toggle("hidden", type !== "tf");
+    document.getElementById("answerFieldFill").classList.toggle("hidden", type !== "fill");
+    if (type === "mc") refreshAnswerOptions();
+  }
+
+  function addOptionRow(value){
+    const wrap = document.getElementById("optionsWrap");
+    if (wrap.children.length >= LET.length) return;
+    const row = document.createElement("div");
+    row.className = "optrow";
+    row.innerHTML = `
+      <span class="optn">${LET[wrap.children.length]}</span>
+      <input type="text" class="optInput" value="${escHtml(value || "")}" placeholder="ตัวเลือกที่ ${LET[wrap.children.length]}">
+      <button class="del" type="button">ลบ</button>
+    `;
+    wrap.appendChild(row);
+    row.querySelector(".optInput").oninput = refreshAnswerOptions;
+    row.querySelector(".del").onclick = () => {
+      if (wrap.children.length <= 2) return; // อย่างน้อย 2 ตัวเลือก
+      row.remove();
+      renumberOptions();
+      refreshAnswerOptions();
+    };
+    renumberOptions();
+  }
+
+  function renumberOptions(){
+    [...document.querySelectorAll("#optionsWrap .optrow")].forEach((row, i) => {
+      row.querySelector(".optn").textContent = LET[i];
+      row.querySelector(".optInput").placeholder = "ตัวเลือกที่ " + LET[i];
+    });
+  }
+
+  function currentOptions(){
+    return [...document.querySelectorAll("#optionsWrap .optInput")].map(i => i.value.trim()).filter(Boolean);
+  }
+
+  function refreshAnswerOptions(){
+    const sel = document.getElementById("answerSelectMc");
+    const prev = sel.value;
+    const opts = currentOptions();
+    sel.innerHTML = opts.map(o => `<option value="${escHtml(o)}">${escHtml(o)}</option>`).join("");
+    if (opts.includes(prev)) sel.value = prev;
+  }
+
+  /* ── แนบรูปประกอบโจทย์นี้ — อัปโหลดแล้วแทรก ![รูปประกอบ](url) ต่อท้ายโจทย์ให้อัตโนมัติ ── */
+  async function onImageUpload(e){
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = document.getElementById("imgUploadMsg");
+    msg.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังอัปโหลด…</p>';
+    try {
+      const dataUrl = await resizeImageToDataUrlFit(file, 1000);
+      const res = await apiCall("uploadQuestionImage", { adminPassword: adminPass(), dataUrl, filename: file.name });
+      if (res.ok){
+        attachedImageUrl = res.url;
+        const textEl = document.getElementById("textInput");
+        textEl.value = textEl.value.replace(/\n\n!\[รูปประกอบ\]\([^)]*\)\s*$/, "").trimEnd() + `\n\n![รูปประกอบ](${res.url})`;
+        const preview = document.getElementById("imgUploadPreview");
+        preview.src = res.url;
+        preview.classList.remove("hidden");
+        msg.innerHTML = '<div class="msg ok">แนบรูปเข้าท้ายโจทย์แล้ว</div>';
+      } else {
+        msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "อัปโหลดไม่สำเร็จ")}</div>`;
+      }
+    } catch (err) {
+      msg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
+    }
+    e.target.value = "";
+  }
+
+  async function onSubmit(e){
+    e.preventDefault();
+    const subject = document.getElementById("subjectSel").value;
+    const type = document.getElementById("typeSel").value;
+    const strand = document.getElementById("strandSel").value;
+    const text = document.getElementById("textInput").value.trim();
+    const score = Number(document.getElementById("scoreInput").value) || 1;
+    const note = document.getElementById("noteInput").value.trim();
+    const msg = document.getElementById("addMsg");
+
+    let options = [], answer = "";
+    if (type === "mc"){
+      options = currentOptions();
+      answer = document.getElementById("answerSelectMc").value;
+      if (options.length < 2){ msg.innerHTML = '<div class="msg bad">ต้องมีตัวเลือกอย่างน้อย 2 ข้อ</div>'; return; }
+      if (!answer){ msg.innerHTML = '<div class="msg bad">กรุณาเลือกเฉลย</div>'; return; }
+    } else if (type === "tf"){
+      answer = document.getElementById("answerSelectTf").value;
+    } else {
+      answer = document.getElementById("answerInputFill").value.trim();
+      if (!answer){ msg.innerHTML = '<div class="msg bad">กรุณาใส่เฉลย</div>'; return; }
+    }
+
+    if (!text){ msg.innerHTML = '<div class="msg bad">กรุณากรอกโจทย์</div>'; return; }
+
+    const btn = e.target.querySelector("button[type=submit]");
+    btn.disabled = true; btn.textContent = "กำลังเพิ่ม…";
+
+    const res = await apiCall("adminAddQuestion", { adminPassword: adminPass(), subject, type, strand, text, options, answer, score, note });
+
+    btn.disabled = false; btn.textContent = "เพิ่มข้อสอบ";
+
+    if (res.ok){
+      sessionCount++;
+      updateSessionCount();
+      msg.innerHTML = '<div class="msg ok">เพิ่มข้อสอบแล้ว — กรอกข้อถัดไปได้เลย</div>';
+      // ล้างเฉพาะเนื้อหาของข้อนี้ คงวิชา/ประเภท/สาระที่เลือกไว้ไว้ ช่วยให้เพิ่มข้อถัด ๆ ไปเร็วขึ้น
+      document.getElementById("textInput").value = "";
+      document.getElementById("noteInput").value = "";
+      document.getElementById("scoreInput").value = "1";
+      document.getElementById("optionsWrap").innerHTML = "";
+      addOptionRow(); addOptionRow();
+      refreshAnswerOptions();
+      document.getElementById("answerInputFill").value = "";
+      attachedImageUrl = "";
+      document.getElementById("imgUploadMsg").innerHTML = "";
+      document.getElementById("imgUploadPreview").classList.add("hidden");
+      document.getElementById("textInput").focus();
+    } else {
+      msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "เพิ่มไม่สำเร็จ")}</div>`;
+    }
+  }
+})();
+</script>
+</body>
+</html>
