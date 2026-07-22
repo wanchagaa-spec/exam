@@ -872,7 +872,9 @@ function uploadImageToDrive_(folder, dataUrl, filename) {
   const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-  return { ok: true, url: 'https://drive.google.com/uc?export=view&id=' + file.getId() };
+  // ใช้ endpoint thumbnail แทน uc?export=view เพราะ uc?export=view มักโดน Drive
+  // สกัดเป็นหน้าเตือน "can't scan for viruses" แทนรูปจริงเวลาฝังเป็น <img src> ข้ามโดเมน
+  return { ok: true, url: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1600' };
 }
 
 function uploadQuestionImage(body) {
