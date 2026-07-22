@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 224" width="380" height="224" font-family="Segoe UI, Arial, sans-serif">
+<rect x="0" y="0" width="380" height="224" fill="#fff"/>
+<line x1="34" y1="196.0" x2="150" y2="196.0" stroke="#eee" stroke-width="1"/>
+<line x1="34" y1="161.6" x2="150" y2="161.6" stroke="#eee" stroke-width="1"/>
+<line x1="34" y1="127.2" x2="150" y2="127.2" stroke="#eee" stroke-width="1"/>
+<line x1="34" y1="92.8" x2="150" y2="92.8" stroke="#eee" stroke-width="1"/>
+<line x1="34" y1="58.4" x2="150" y2="58.4" stroke="#eee" stroke-width="1"/>
+<line x1="34" y1="24.0" x2="150" y2="24.0" stroke="#eee" stroke-width="1"/>
+<line x1="34" y1="24" x2="34" y2="196" stroke="#333" stroke-width="1.5"/>
+<line x1="34" y1="196" x2="150" y2="196" stroke="#333" stroke-width="1.5"/>
+<polygon points="34,23 30,31 38,31" fill="#333"/>
+<polygon points="151,196 143,192 143,200" fill="#333"/>
+<text x="28" y="26" font-size="12" text-anchor="end" fill="#333">y</text>
+<text x="152" y="210" font-size="12" fill="#333">x</text>
+<line x1="92.0" y1="196" x2="92.0" y2="200" stroke="#333"/>
+<text x="92.0" y="212" font-size="12" text-anchor="middle" fill="#333">1</text>
+<line x1="34.0" y1="173.6" x2="92.0" y2="161.6" stroke="#3b3f8f" stroke-width="2.4"/>
+<line x1="92.0" y1="178.8" x2="150.0" y2="166.8" stroke="#3b3f8f" stroke-width="2.4"/>
+<circle cx="92.0" cy="161.6" r="3.6" fill="#fff" stroke="#3b3f8f" stroke-width="2"/>
+<circle cx="92.0" cy="178.8" r="3.6" fill="#fff" stroke="#3b3f8f" stroke-width="2"/>
+<circle cx="92.0" cy="178.8" r="3.6" fill="#3b3f8f"/>
+<line x1="30" y1="178.8" x2="34" y2="178.8" stroke="#333"/>
+<text x="28" y="182.8" font-size="11" text-anchor="end" fill="#333">1</text>
+<line x1="30" y1="161.6" x2="34" y2="161.6" stroke="#333"/>
+<text x="28" y="165.6" font-size="11" text-anchor="end" fill="#333">2</text>
+<text x="92.0" y="18" font-size="13" text-anchor="middle" fill="#111" font-style="italic">y = f(x)</text><line x1="224" y1="196.0" x2="340" y2="196.0" stroke="#eee" stroke-width="1"/>
+<line x1="224" y1="161.6" x2="340" y2="161.6" stroke="#eee" stroke-width="1"/>
+<line x1="224" y1="127.2" x2="340" y2="127.2" stroke="#eee" stroke-width="1"/>
+<line x1="224" y1="92.8" x2="340" y2="92.8" stroke="#eee" stroke-width="1"/>
+<line x1="224" y1="58.4" x2="340" y2="58.4" stroke="#eee" stroke-width="1"/>
+<line x1="224" y1="24.0" x2="340" y2="24.0" stroke="#eee" stroke-width="1"/>
+<line x1="224" y1="24" x2="224" y2="196" stroke="#333" stroke-width="1.5"/>
+<line x1="224" y1="196" x2="340" y2="196" stroke="#333" stroke-width="1.5"/>
+<polygon points="224,23 220,31 228,31" fill="#333"/>
+<polygon points="341,196 333,192 333,200" fill="#333"/>
+<text x="218" y="26" font-size="12" text-anchor="end" fill="#333">y</text>
+<text x="342" y="210" font-size="12" fill="#333">x</text>
+<line x1="282.0" y1="196" x2="282.0" y2="200" stroke="#333"/>
+<text x="282.0" y="212" font-size="12" text-anchor="middle" fill="#333">1</text>
+<line x1="224.0" y1="156.4" x2="282.0" y2="144.4" stroke="#3b3f8f" stroke-width="2.4"/>
+<line x1="282.0" y1="127.2" x2="340.0" y2="115.2" stroke="#3b3f8f" stroke-width="2.4"/>
+<circle cx="282.0" cy="144.4" r="3.6" fill="#fff" stroke="#3b3f8f" stroke-width="2"/>
+<circle cx="282.0" cy="127.2" r="3.6" fill="#fff" stroke="#3b3f8f" stroke-width="2"/>
+<circle cx="282.0" cy="127.2" r="3.6" fill="#3b3f8f"/>
+<line x1="220" y1="144.4" x2="224" y2="144.4" stroke="#333"/>
+<text x="218" y="148.4" font-size="11" text-anchor="end" fill="#333">3</text>
+<line x1="220" y1="127.2" x2="224" y2="127.2" stroke="#333"/>
+<text x="218" y="131.2" font-size="11" text-anchor="end" fill="#333">4</text>
+<text x="282.0" y="18" font-size="13" text-anchor="middle" fill="#111" font-style="italic">y = g(x)</text>
+</svg>

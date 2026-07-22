@@ -352,8 +352,10 @@ function renderMath(el){
   catch(e){ /* แสดงข้อความดิบแทนถ้า render พลาด ไม่ทำให้หน้าเว็บพัง */ }
 }
 
-/* แปลงรูปแบบ ![alt](url) ในข้อความเป็น <img> จริง ใช้กับโจทย์/ตัวเลือกที่แนบรูปประกอบ */
-const IMAGE_MD_RE = /!\[([^\]]*)\]\(((?:https?:|data:image\/)[^\s)]+)\)/g;
+/* แปลงรูปแบบ ![alt](url) ในข้อความเป็น <img> จริง ใช้กับโจทย์/ตัวเลือกที่แนบรูปประกอบ
+   รองรับทั้งลิงก์ Drive/https ที่ได้จากการอัปโหลด, data URL, และพาธไฟล์ในเว็บเอง เช่น assets/graphs/xxx.svg
+   (สำหรับรูปกราฟ/แผนภาพที่ฝังไว้ในโปรเจกต์ ไม่ต้องอัปโหลดผ่านแอดมิน) — เนื้อหานี้แก้ได้เฉพาะแอดมินเท่านั้น จึงเปิดกว้างพาธได้โดยไม่เสี่ยง */
+const IMAGE_MD_RE = /!\[([^\]]*)\]\((?!javascript:)([^\s)]+)\)/g;
 function renderImages(el){
   if (!el) return;
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);

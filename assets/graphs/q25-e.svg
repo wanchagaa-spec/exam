@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 300" width="380" height="300" font-family="Segoe UI, Arial, sans-serif">
+<rect x="0" y="0" width="380" height="300" fill="#fff"/>
+<line x1="44" y1="238.0" x2="352" y2="238.0" stroke="#333" stroke-width="1.4"/>
+<line x1="44.0" y1="20" x2="44.0" y2="250" stroke="#333" stroke-width="1.4"/>
+<text x="350" y="232.0" font-size="12" text-anchor="end" fill="#333">x</text>
+<text x="50.0" y="30" font-size="12" fill="#333">y</text>
+<line x1="51.3" y1="238.0" x2="51.3" y2="242.0" stroke="#333"/>
+<text x="51.3" y="254.0" font-size="10" text-anchor="middle" fill="#555">1</text>
+<line x1="88.0" y1="238.0" x2="88.0" y2="242.0" stroke="#333"/>
+<text x="88.0" y="254.0" font-size="10" text-anchor="middle" fill="#555">2</text>
+<line x1="124.7" y1="238.0" x2="124.7" y2="242.0" stroke="#333"/>
+<text x="124.7" y="254.0" font-size="10" text-anchor="middle" fill="#555">3</text>
+<line x1="161.3" y1="238.0" x2="161.3" y2="242.0" stroke="#333"/>
+<text x="161.3" y="254.0" font-size="10" text-anchor="middle" fill="#555">4</text>
+<line x1="198.0" y1="238.0" x2="198.0" y2="242.0" stroke="#333"/>
+<text x="198.0" y="254.0" font-size="10" text-anchor="middle" fill="#555">5</text>
+<line x1="234.7" y1="238.0" x2="234.7" y2="242.0" stroke="#333"/>
+<text x="234.7" y="254.0" font-size="10" text-anchor="middle" fill="#555">6</text>
+<line x1="271.3" y1="238.0" x2="271.3" y2="242.0" stroke="#333"/>
+<text x="271.3" y="254.0" font-size="10" text-anchor="middle" fill="#555">7</text>
+<line x1="308.0" y1="238.0" x2="308.0" y2="242.0" stroke="#333"/>
+<text x="308.0" y="254.0" font-size="10" text-anchor="middle" fill="#555">8</text>
+<line x1="344.7" y1="238.0" x2="344.7" y2="242.0" stroke="#333"/>
+<text x="344.7" y="254.0" font-size="10" text-anchor="middle" fill="#555">9</text>
+<polyline points="44.0,145.4 49.1,148.4 54.3,151.3 59.4,154.0 64.5,156.5 69.7,158.8 74.8,161.0 79.9,163.1 85.1,164.9 90.2,166.6 95.3,168.1 100.5,169.5 105.6,170.7 110.7,171.7 115.9,172.6 121.0,173.3 126.1,173.8 131.3,174.2 136.4,174.4 141.5,174.5 146.7,174.4 151.8,174.1 156.9,173.6 162.1,173.0 167.2,172.2 172.3,171.3 177.5,170.2 182.6,168.9 187.7,167.5 192.9,165.9 198.0,164.1 203.1,162.2 208.3,160.1 213.4,157.8 218.5,155.4 223.7,152.8 228.8,150.0 233.9,147.1 239.1,144.0 244.2,140.8 249.3,137.4 254.5,133.8 259.6,130.0 264.7,126.1 269.9,122.0 275.0,117.8 280.1,113.4 285.3,108.8 290.4,104.1 295.5,99.2 300.7,94.1 305.8,88.9 310.9,83.5 316.1,77.9 321.2,72.2 326.3,66.3 331.5,60.3 336.6,54.1 341.7,47.7 346.9,41.1 352.0,34.4" fill="none" stroke="#3b3f8f" stroke-width="2.6"/>
+<line x1="44.0" y1="151.5" x2="352.0" y2="252.4" stroke="#c05621" stroke-width="2" stroke-dasharray="6 4"/>
+<circle cx="88.0" cy="165.9" r="4" fill="#111"/>
+<text x="95.0" y="157.9" font-size="12" fill="#111">A(2, 6)</text>
+<circle cx="308.0" cy="238.0" r="4" fill="#111"/>
+<text x="315.0" y="230.0" font-size="12" fill="#111">B(8, 0)</text>
+<text x="69.7" y="150.8" font-size="12" font-style="italic" fill="#3b3f8f">y = f(x)</text>
+</svg>
