@@ -426,6 +426,17 @@ function demoNotify(recipientEmail, type, postId, actorName){
   demoNotificationsSave(list);
 }
 
+/* โหมดตัวอย่าง: ประวัติการทำข้อสอบ (หน้าโปรไฟล์) — ของจริงเก็บในชีต Results ผ่าน submitExam อยู่แล้ว
+   โหมดตัวอย่างตรวจคะแนนในเบราว์เซอร์ล้วน ๆ ไม่เคยส่งไปเซิร์ฟเวอร์ จึงต้องเก็บเองที่นี่เพื่อให้ทดสอบฟีเจอร์นี้ได้ */
+const DEMO_RESULTS_KEY = "examSiteDemoResults";
+function demoResultsLoad(){ try { return JSON.parse(localStorage.getItem(DEMO_RESULTS_KEY) || "[]"); } catch(e){ return []; } }
+function demoResultsSave(list){ localStorage.setItem(DEMO_RESULTS_KEY, JSON.stringify(list)); }
+function demoResultsAdd(entry){
+  const list = demoResultsLoad();
+  list.push(entry);
+  demoResultsSave(list);
+}
+
 /* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
 async function blueprintSummary(subject){
   const res = await apiCall("blueprint", { subject });
@@ -654,6 +665,14 @@ async function demoApi(action, payload){
 
   if (action === "blueprint"){
     return { ok:true, sections: demoBlueprintLoad(payload.subject) };
+  }
+
+  if (action === "listMyResults"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    const results = demoResultsLoad()
+      .filter(r => r.email === email)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    return { ok:true, results };
   }
 
   if (action === "uploadQuestionImage"){

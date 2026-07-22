@@ -13,6 +13,17 @@
   .profilecard{display:flex;gap:18px;align-items:center;justify-content:flex-end;text-align:right;margin-bottom:26px}
   .profilecard .who h1{font-size:22px;margin-bottom:4px}
   .profilecard .pic{flex:none;text-align:center}
+  .statsline{margin-bottom:18px;font-size:14.5px;color:var(--muted)}
+  .tabbar{display:flex;gap:22px;margin-bottom:20px;border-bottom:1px solid var(--line)}
+  .tabbtn{background:none;border:none;border-bottom:2px solid transparent;padding:10px 2px;
+    font-weight:700;font-size:15px;color:var(--muted);cursor:pointer}
+  .tabbtn.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .examrow{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;margin-bottom:12px}
+  .examrow .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px}
+  .examrow .subj{font-weight:700}
+  .examrow .when{font-size:13px;color:var(--muted2);margin-top:2px}
+  .examrow .score{font-size:14.5px;margin:6px 0}
+  .examrow .foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted2)}
 </style>
 </head>
 <body>
@@ -34,9 +45,20 @@
       </div>
       <div id="avatarMsg"></div>
 
-      <h2 style="font-size:20px;margin-bottom:14px">โพสต์ของฉัน</h2>
-      <p class="muted" style="margin-bottom:16px;font-size:14px">โพสต์ใหม่ได้จากปุ่ม + บน header</p>
-      <div id="list"></div>
+      <div id="examStats" class="statsline hidden"></div>
+
+      <div class="tabbar">
+        <button class="tabbtn on" id="tabBtnHistory" type="button">ประวัติการทำข้อสอบ</button>
+        <button class="tabbtn" id="tabBtnPosts" type="button">โพสต์ของฉัน</button>
+      </div>
+
+      <div id="tabHistory">
+        <div id="historyList"></div>
+      </div>
+      <div id="tabPosts" class="hidden">
+        <p class="muted" style="margin-bottom:16px;font-size:14px">โพสต์ใหม่ได้จากปุ่ม + บน header</p>
+        <div id="list"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -101,6 +123,65 @@
 
   loadMyPosts();
   document.addEventListener("examSitePostCreated", loadMyPosts);
+
+  /* ── แท็บ: ประวัติการทำข้อสอบ / โพสต์ของฉัน ── */
+  function switchProfileTab(which){
+    document.getElementById("tabHistory").classList.toggle("hidden", which !== "history");
+    document.getElementById("tabPosts").classList.toggle("hidden", which !== "posts");
+    document.getElementById("tabBtnHistory").classList.toggle("on", which === "history");
+    document.getElementById("tabBtnPosts").classList.toggle("on", which === "posts");
+  }
+  document.getElementById("tabBtnHistory").onclick = () => switchProfileTab("history");
+  document.getElementById("tabBtnPosts").onclick = () => switchProfileTab("posts");
+
+  function fmtDuration(sec){
+    sec = Number(sec) || 0;
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  function examRowHtml(r){
+    const meta = postSubjectMeta(r.subject);
+    const subjName = meta ? `${meta.icon} ${escHtml(meta.name)}` : escHtml(r.subject);
+    return `
+    <div class="examrow">
+      <div class="top">
+        <div>
+          <div class="subj">${subjName}</div>
+          <div class="when">${postFmtTime(r.timestamp)}</div>
+        </div>
+        <span class="pill ${r.passed ? "ok" : "no"}">${r.passed ? "ผ่าน" : "ไม่ผ่าน"}</span>
+      </div>
+      <div class="score">ได้ <b>${r.score}/${r.total}</b> คะแนน (${r.percent}%)</div>
+      <div class="foot">
+        <span>ใช้เวลา ${fmtDuration(r.usedSeconds)}${r.auto ? " · หมดเวลาอัตโนมัติ" : ""}</span>
+        ${meta ? `<a class="btn s" style="min-height:32px;padding:0 12px;font-size:12.5px" href="exam.html?subject=${meta.slug}">ทำใหม่ →</a>` : ""}
+      </div>
+    </div>`;
+  }
+
+  async function loadHistory(){
+    const box = document.getElementById("historyList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("listMyResults", { email: user.email });
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+
+    const results = res.results || [];
+    const statsEl = document.getElementById("examStats");
+    if (results.length){
+      const avg = Math.round(results.reduce((s, r) => s + r.percent, 0) / results.length);
+      statsEl.textContent = `ทำข้อสอบไปแล้ว ${results.length} ครั้ง · คะแนนเฉลี่ย ${avg}%`;
+      statsEl.classList.remove("hidden");
+    } else {
+      statsEl.classList.add("hidden");
+    }
+
+    box.innerHTML = results.length
+      ? results.map(examRowHtml).join("")
+      : '<p class="muted">ยังไม่เคยทำข้อสอบ ไปเลือกวิชาที่ต้องการได้ที่หน้า "รายวิชา"</p>';
+  }
+
+  loadHistory();
 })();
 </script>
 </body>

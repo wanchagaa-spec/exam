@@ -69,9 +69,7 @@
   .ring .val{position:absolute;inset:0;display:grid;place-items:center;font-size:34px;font-weight:800}
   .verdict{text-align:center;margin-bottom:22px}
   .verdict h2{font-size:27px;margin-bottom:5px}
-  .pill{display:inline-block;padding:5px 15px;border-radius:20px;font-weight:800;font-size:14px;margin-bottom:12px}
-  .pill.ok{background:rgba(74,222,128,.15);color:var(--ok)}
-  .pill.no{background:rgba(255,107,107,.15);color:var(--danger)}
+  .verdict .pill{margin-bottom:12px}
   .rev{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:11px}
   .rev.r{border-left:4px solid var(--ok)}
   .rev.w{border-left:4px solid var(--danger)}
@@ -385,7 +383,13 @@
       }
 
       const percent = total ? Math.round(score/total*100) : 0;
-      render({ ok:true, score, total, percent, passed: percent >= PASS_PERCENT, detail });
+      const passed = percent >= PASS_PERCENT;
+      demoResultsAdd({
+        timestamp: new Date().toISOString(), subject: subject.slug, email: user.email,
+        score, total, percent, passed,
+        usedSeconds: subject.minutes*60 - Math.max(left,0), auto: !!auto
+      });
+      render({ ok:true, score, total, percent, passed, detail });
       return;
     }
 

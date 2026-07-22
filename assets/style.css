@@ -193,3 +193,8 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 
 /* ── รูปประกอบโจทย์ (แปลงจาก ![alt](url) ด้วย renderImages) ── */
 .q-image{max-width:100%;border-radius:var(--r);margin:10px 0;display:block}
+
+/* ── ป้ายผ่าน/ไม่ผ่าน (ใช้ร่วมกัน: exam.html หน้าผลสอบ, account.html ประวัติการทำข้อสอบ) ── */
+.pill{display:inline-block;padding:5px 15px;border-radius:20px;font-weight:800;font-size:14px}
+.pill.ok{background:rgba(74,222,128,.15);color:var(--ok)}
+.pill.no{background:rgba(255,107,107,.15);color:var(--danger)}

@@ -96,7 +96,7 @@ function doGet(e) {
 /* action ที่แค่อ่านข้อมูล ไม่แก้ไขอะไร — ข้ามการล็อกได้ ไม่ต้องรอคิวหลังไมค์การเขียนของคนอื่น
    (ช่วยให้การโหลดบอร์ด/รายการต่าง ๆ เร็วขึ้น โดยเฉพาะเวลามีคนใช้งานพร้อมกันหลายคน) */
 const READ_ONLY_ACTIONS = new Set([
-  'login', 'blueprint', 'listPosts', 'listComments', 'listNotifications',
+  'login', 'blueprint', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
   'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs'
 ]);
 
@@ -130,6 +130,7 @@ function routeAction_(body) {
     case 'updateAvatar':         return updateAvatar(body);
     case 'contact':              return contact(body);
     case 'submitExam':           return submitExam(body);
+    case 'listMyResults':        return listMyResults(body);
     case 'createPost':           return createPost(body);
     case 'listPosts':            return listPosts(body);
     case 'deletePost':           return deletePost(body);
@@ -736,6 +737,33 @@ function submitExam(body) {
   CacheService.getScriptCache().remove(body.sessionId);
 
   return { ok: true, score, total, percent, passed, detail };
+}
+
+/** ประวัติการทำข้อสอบของผู้ใช้คนเดียว (หน้าโปรไฟล์) — กรองชีต Results ตามอีเมล เรียงล่าสุดก่อน */
+function listMyResults(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+
+  const rows = sheet_('Results', ['timestamp', 'subject', 'email', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
+    .getDataRange().getValues();
+
+  const results = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][2]).toLowerCase() !== email) continue;
+    results.push({
+      timestamp: new Date(rows[i][0]).toISOString(),
+      subject: rows[i][1],
+      score: Number(rows[i][4]) || 0,
+      total: Number(rows[i][5]) || 0,
+      percent: Number(rows[i][6]) || 0,
+      passed: rows[i][7] === 'ผ่าน',
+      usedSeconds: Number(rows[i][8]) || 0,
+      auto: rows[i][9] === 'ใช่'
+    });
+  }
+  results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  return { ok: true, results };
 }
 
 /* ══════════════════════════ แอดมิน: จัดการคลังข้อสอบ ══════════════════════════ */
