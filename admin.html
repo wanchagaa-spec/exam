@@ -113,6 +113,18 @@
       </div>
 
       <div id="tabImport" class="hidden">
+        <div class="card" style="margin-bottom:20px">
+          <h3 style="margin-bottom:6px">อัปโหลดรูปประกอบโจทย์</h3>
+          <p class="muted" style="margin-bottom:16px">
+            เลือกรูป ระบบจะย่อขนาดและอัปโหลดขึ้น Google Drive ให้อัตโนมัติ ได้ข้อความอ้างอิงกลับมาเป็น
+            <code>![alt](url)</code> — คัดลอกไปวางในตำแหน่งที่ต้องการภายใน <code>text</code> หรือ <code>note</code> ของ JSON ด้านล่างได้เลย
+          </p>
+          <div id="imgUploadMsg"></div>
+          <input type="file" id="imgUploadInput" accept="image/*" class="hidden">
+          <button class="btn s" id="imgUploadBtn" type="button">เลือกรูป…</button>
+          <div id="imgUploadResult" style="margin-top:14px"></div>
+        </div>
+
         <div class="card">
           <h3 style="margin-bottom:6px">นำเข้าข้อมูล (JSON)</h3>
           <p class="muted" style="margin-bottom:16px">
@@ -190,6 +202,8 @@
     document.getElementById("tabBtnBlueprint").onclick = () => switchTab("blueprint");
     document.getElementById("tabBtnImport").onclick = () => switchTab("import");
     document.getElementById("importBtn").onclick = onBulkImport;
+    document.getElementById("imgUploadBtn").onclick = () => document.getElementById("imgUploadInput").click();
+    document.getElementById("imgUploadInput").onchange = onImageUpload;
 
     document.getElementById("addSectionBtn").onclick = () => { addSectionRow(); updateBlueprintTotal(); };
     document.getElementById("saveBlueprintBtn").onclick = onSaveConfig;
@@ -261,6 +275,43 @@
     });
 
     renderMath(box);
+    renderImages(box);
+  }
+
+  /* ── อัปโหลดรูปประกอบโจทย์ขึ้น Google Drive ── */
+  async function onImageUpload(e){
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = document.getElementById("imgUploadMsg");
+    const result = document.getElementById("imgUploadResult");
+    result.innerHTML = "";
+    msg.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังอัปโหลด…</p>';
+    try {
+      const dataUrl = await resizeImageToDataUrlFit(file, 1000);
+      const res = await apiCall("uploadQuestionImage", { adminPassword: adminPass(), dataUrl, filename: file.name });
+      if (res.ok){
+        const snippet = `![รูปประกอบ](${res.url})`;
+        msg.innerHTML = '<div class="msg ok">อัปโหลดสำเร็จ คัดลอกข้อความด้านล่างไปวางในตำแหน่งที่ต้องการ</div>';
+        result.innerHTML = `
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <code id="imgSnippet" style="background:var(--card-hi);padding:8px 12px;border-radius:8px;font-size:13.5px;word-break:break-all">${escHtml(snippet)}</code>
+            <button class="btn s" id="imgCopyBtn" type="button">คัดลอก</button>
+          </div>
+          <img src="${res.url}" alt="" style="max-width:220px;border-radius:var(--r);margin-top:10px;display:block">
+        `;
+        document.getElementById("imgCopyBtn").onclick = () => {
+          navigator.clipboard.writeText(snippet);
+          const copyBtn = document.getElementById("imgCopyBtn");
+          copyBtn.textContent = "คัดลอกแล้ว";
+          setTimeout(() => { copyBtn.textContent = "คัดลอก"; }, 1500);
+        };
+      } else {
+        msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "อัปโหลดไม่สำเร็จ")}</div>`;
+      }
+    } catch (err) {
+      msg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
+    }
+    e.target.value = "";
   }
 
   /* ── โครงสร้างชุดข้อสอบ (Blueprint) — วิชาหนึ่งมีได้หลายชุด เลือกได้ว่าชุดไหน active ── */

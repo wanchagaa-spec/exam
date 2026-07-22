@@ -190,3 +190,6 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 .comment .delc{background:none;border:none;color:var(--danger);font-size:12px;cursor:pointer;margin-top:4px;align-self:flex-start}
 .commentForm{display:flex;gap:8px;margin-top:8px}
 .commentForm input{flex:1;min-height:44px;padding:0 14px;border:1.5px solid var(--line);border-radius:999px;font:inherit;font-size:14.5px}
+
+/* ── รูปประกอบโจทย์ (แปลงจาก ![alt](url) ด้วย renderImages) ── */
+.q-image{max-width:100%;border-radius:var(--r);margin:10px 0;display:block}

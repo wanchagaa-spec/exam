@@ -262,6 +262,7 @@
     });
     updateProgress();
     renderMath(box);
+    renderImages(box);
 
     document.getElementById("send").onclick = onSend;
   }
@@ -450,6 +451,7 @@
 
     app.innerHTML = '<div class="mid" style="padding-top:24px">' + h + '</div>';
     renderMath(app);
+    renderImages(app);
     window.scrollTo(0,0);
   }
 })();

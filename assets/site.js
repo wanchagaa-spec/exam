@@ -296,6 +296,27 @@ function resizeImageToDataUrl(file, maxSize){
   });
 }
 
+/* ย่อรูปประกอบโจทย์ก่อนอัปโหลดขึ้น Drive (คงสัดส่วนเดิม ไม่ครอปเป็นสี่เหลี่ยมจัตุรัสแบบ avatar) */
+function resizeImageToDataUrlFit(file, maxDim, quality){
+  maxDim = maxDim || 1000;
+  quality = quality || 0.82;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.onload = () => { img.onerror = () => reject(new Error("เปิดรูปไม่สำเร็จ")); img.src = reader.result; };
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function sha256(text){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,"0")).join("");
@@ -329,6 +350,37 @@ function renderMath(el){
   if (!el || typeof window.renderMathInElement !== "function") return;
   try { window.renderMathInElement(el, { delimiters: KATEX_DELIMITERS, throwOnError: false }); }
   catch(e){ /* แสดงข้อความดิบแทนถ้า render พลาด ไม่ทำให้หน้าเว็บพัง */ }
+}
+
+/* แปลงรูปแบบ ![alt](url) ในข้อความเป็น <img> จริง ใช้กับโจทย์/ตัวเลือกที่แนบรูปประกอบ */
+const IMAGE_MD_RE = /!\[([^\]]*)\]\(((?:https?:|data:image\/)[^\s)]+)\)/g;
+function renderImages(el){
+  if (!el) return;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  const targets = [];
+  let node;
+  while ((node = walker.nextNode())){
+    if (node.nodeValue && IMAGE_MD_RE.test(node.nodeValue)) targets.push(node);
+    IMAGE_MD_RE.lastIndex = 0;
+  }
+  targets.forEach(textNode => {
+    const text = textNode.nodeValue;
+    IMAGE_MD_RE.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let lastIndex = 0, m;
+    while ((m = IMAGE_MD_RE.exec(text))){
+      if (m.index > lastIndex) frag.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+      const img = document.createElement("img");
+      img.src = m[2];
+      img.alt = m[1] || "";
+      img.className = "q-image";
+      img.loading = "lazy";
+      frag.appendChild(img);
+      lastIndex = m.index + m[0].length;
+    }
+    if (lastIndex < text.length) frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+    textNode.parentNode.replaceChild(frag, textNode);
+  });
 }
 
 /* โหมดตัวอย่าง: คลังข้อสอบที่แอดมินเพิ่มผ่าน admin.html เก็บไว้ต่อวิชาใน localStorage
@@ -602,6 +654,11 @@ async function demoApi(action, payload){
 
   if (action === "blueprint"){
     return { ok:true, sections: demoBlueprintLoad(payload.subject) };
+  }
+
+  if (action === "uploadQuestionImage"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    return { ok:true, url: payload.dataUrl };
   }
 
   if (action === "adminListBlueprintConfigs"){

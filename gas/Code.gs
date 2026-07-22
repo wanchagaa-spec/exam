@@ -46,6 +46,12 @@
  *               note    : คำอธิบายเฉลย (ไม่บังคับ) พิมพ์สมการคณิตศาสตร์แบบ LaTeX ได้ เช่น $x^2+1$
  *               strand  : สาระ/หมวดเนื้อหาของข้อนี้ ต้องตรงกับชื่อใน SUBJECT_STRANDS (assets/demo-data.js) เป๊ะ ๆ
  *                         ใช้ตอนสุ่มข้อสอบแยกตามโครงสร้างชุดข้อสอบ (Blueprint)
+ *
+ * รูปภาพประกอบโจทย์: อัปโหลดผ่านหน้า admin.html (แท็บ "นำเข้าข้อมูล (JSON)") ระบบเก็บไฟล์ไว้ใน
+ *   โฟลเดอร์ Google Drive ชื่อ "ข้อสอบ - รูปประกอบโจทย์" (สร้างให้อัตโนมัติ วางไว้ข้าง ๆ ไฟล์ชีตนี้)
+ *   แล้วคืนโค้ด Markdown ให้คัดลอกไปวางในตำแหน่งที่ต้องการของ text/note เช่น ![คำอธิบาย](URL)
+ *   ⚠ ฟีเจอร์นี้ต้องให้สิทธิ์ Apps Script เข้าถึง Google Drive ด้วย — ตอน Deploy ครั้งแรกหลังอัปเดตไฟล์นี้
+ *      ระบบจะถามขอสิทธิ์เพิ่ม (authorize) กดอนุญาตได้เลย ไม่ได้เข้าถึงไฟล์อื่นในไดรฟ์นอกเหนือจากโฟลเดอร์นี้
  */
 
 const TOKEN          = 'ai75jg8f3d9g7k3';         // ★ ต้องตรงกับ APP.token ใน assets/site.js
@@ -137,6 +143,7 @@ function routeAction_(body) {
     case 'adminListQuestions':   return adminListQuestions(body);
     case 'adminAddQuestion':     return adminAddQuestion(body);
     case 'adminDeleteQuestion':  return adminDeleteQuestion(body);
+    case 'uploadQuestionImage':  return uploadQuestionImage(body);
     case 'adminListBlueprintConfigs':  return adminListBlueprintConfigs(body);
     case 'adminSaveBlueprintConfig':   return adminSaveBlueprintConfig(body);
     case 'adminDeleteBlueprintConfig': return adminDeleteBlueprintConfig(body);
@@ -793,6 +800,49 @@ function adminDeleteQuestion(body) {
     if (String(rows[i][0]) === String(body.id)) { sh.deleteRow(i + 1); break; }
   }
   return { ok: true };
+}
+
+/* ══════════════════════════ รูปภาพประกอบโจทย์ (Google Drive) ══════════════════════════ */
+const IMAGE_FOLDER_NAME = 'ข้อสอบ - รูปประกอบโจทย์';
+const MAX_IMAGE_BASE64_CHARS = 8000000; // ~6MB ไฟล์จริง กันอัปโหลดไฟล์ใหญ่เกินจำเป็น
+
+/** โฟลเดอร์เก็บรูปภาพ — วางไว้ข้าง ๆ ไฟล์ Google Sheet นี้เอง สร้างให้อัตโนมัติถ้ายังไม่มี */
+function imagesFolder_() {
+  const ssFile = DriveApp.getFileById(ss_().getId());
+  const parents = ssFile.getParents();
+  const parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+
+  const existing = parent.getFoldersByName(IMAGE_FOLDER_NAME);
+  if (existing.hasNext()) return existing.next();
+
+  return parent.createFolder(IMAGE_FOLDER_NAME);
+}
+
+/** รับรูปเป็น data URL (base64) จากฝั่งเว็บ อัปโหลดขึ้น Drive แล้วคืนลิงก์ที่ใช้เป็น <img src> ได้ตรง ๆ */
+function uploadQuestionImage(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+
+  const dataUrl = String(body.dataUrl || '');
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) return { ok: false, error: 'ไฟล์รูปไม่ถูกต้อง' };
+  if (match[2].length > MAX_IMAGE_BASE64_CHARS) return { ok: false, error: 'ไฟล์รูปใหญ่เกินไป ลองย่อขนาดก่อนอัปโหลด' };
+
+  const mimeType = match[1];
+  const filename = clean(String(body.filename || 'image')).replace(/[\\/:*?"<>|]/g, '_');
+
+  let bytes;
+  try {
+    bytes = Utilities.base64Decode(match[2]);
+  } catch (err) {
+    return { ok: false, error: 'อ่านไฟล์รูปไม่สำเร็จ' };
+  }
+
+  const blob = Utilities.newBlob(bytes, mimeType, filename);
+  const file = imagesFolder_().createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  const url = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  return { ok: true, url: url };
 }
 
 /* ══════════════════════════ ยูทิลิตี ══════════════════════════ */
