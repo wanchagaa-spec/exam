@@ -132,6 +132,7 @@ function routeAction_(body) {
     case 'submitExam':           return submitExam(body);
     case 'listMyResults':        return listMyResults(body);
     case 'createPost':           return createPost(body);
+    case 'uploadPostImage':      return uploadPostImage(body);
     case 'listPosts':            return listPosts(body);
     case 'deletePost':           return deletePost(body);
     case 'toggleLike':           return toggleLike(body);
@@ -234,8 +235,8 @@ function contact(body) {
 
 /* ══════════════════════════ บอร์ดความคิดเห็น (โพส/ถูกใจ/คอมเมนต์) ══════════════════════════ */
 /** commentCount เก็บตรงในแถวโพสต์เลย (เหมือน likeCount) กันไม่ต้องสแกนทั้งชีต Comments ทุกครั้งที่ดึงฟีด
-    คอลัมน์ใหม่ต่อท้ายชีตเดิม แถวเก่าที่ยังไม่มีค่านี้จะอ่านได้ค่าว่าง ตีความเป็น 0 ให้อัตโนมัติ ไม่ต้อง migrate */
-function postsSheet_()    { return sheet_('Posts', ['id', 'timestamp', 'email', 'name', 'subject', 'text', 'likeCount', 'commentCount']); }
+    image เก็บลิงก์ Drive ของรูปแนบโพสต์ (ถ้ามี) — คอลัมน์ใหม่ทั้งสองต่อท้ายชีตเดิม แถวเก่าที่ยังไม่มีค่านี้จะอ่านได้ค่าว่างอัตโนมัติ ไม่ต้อง migrate */
+function postsSheet_()    { return sheet_('Posts', ['id', 'timestamp', 'email', 'name', 'subject', 'text', 'likeCount', 'commentCount', 'image']); }
 function likesSheet_()    { return sheet_('Likes', ['postId', 'email']); }
 function commentsSheet_() { return sheet_('Comments', ['id', 'postId', 'timestamp', 'email', 'name', 'text']); }
 
@@ -244,12 +245,13 @@ function createPost(body) {
   const name    = clean(String(body.name || '').trim());
   const subject = clean(String(body.subject || '').trim());
   const text    = clean(String(body.text || '').trim());
+  const image   = String(body.image || '').trim();
   if (!email || !name || !subject || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
 
   const id = 'p_' + Utilities.getUuid().slice(0, 10);
   const timestamp = new Date();
-  postsSheet_().appendRow([id, timestamp, email, name, subject, text, 0, 0]);
-  return { ok: true, post: { id, timestamp: timestamp.toISOString(), email, name, subject, text, likeCount: 0, commentCount: 0, likedByMe: false } };
+  postsSheet_().appendRow([id, timestamp, email, name, subject, text, 0, 0, image]);
+  return { ok: true, post: { id, timestamp: timestamp.toISOString(), email, name, subject, text, likeCount: 0, commentCount: 0, image, likedByMe: false } };
 }
 
 function listPosts(body) {
@@ -281,6 +283,7 @@ function listPosts(body) {
       text: String(r[5] || ''),
       likeCount: Number(r[6]) || 0,
       commentCount: Number(r[7]) || 0,
+      image: String(r[8] || ''),
       likedByMe: likedSet.has(String(r[0]))
     });
   }
@@ -830,33 +833,33 @@ function adminDeleteQuestion(body) {
   return { ok: true };
 }
 
-/* ══════════════════════════ รูปภาพประกอบโจทย์ (Google Drive) ══════════════════════════ */
-const IMAGE_FOLDER_NAME = 'ข้อสอบ - รูปประกอบโจทย์';
+/* ══════════════════════════ รูปภาพ (Google Drive) — โจทย์ข้อสอบ + โพสต์บอร์ดความคิดเห็น ══════════════════════════ */
+const IMAGE_FOLDER_NAME      = 'ข้อสอบ - รูปประกอบโจทย์';
+const POST_IMAGE_FOLDER_NAME = 'ข้อสอบ - รูปโพสต์บอร์ดความคิดเห็น';
 const MAX_IMAGE_BASE64_CHARS = 8000000; // ~6MB ไฟล์จริง กันอัปโหลดไฟล์ใหญ่เกินจำเป็น
 
-/** โฟลเดอร์เก็บรูปภาพ — วางไว้ข้าง ๆ ไฟล์ Google Sheet นี้เอง สร้างให้อัตโนมัติถ้ายังไม่มี */
-function imagesFolder_() {
+/** หาโฟลเดอร์ Drive ตามชื่อ วางไว้ข้าง ๆ ไฟล์ Google Sheet นี้เอง สร้างให้อัตโนมัติถ้ายังไม่มี */
+function driveFolder_(name) {
   const ssFile = DriveApp.getFileById(ss_().getId());
   const parents = ssFile.getParents();
   const parent = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
 
-  const existing = parent.getFoldersByName(IMAGE_FOLDER_NAME);
+  const existing = parent.getFoldersByName(name);
   if (existing.hasNext()) return existing.next();
 
-  return parent.createFolder(IMAGE_FOLDER_NAME);
+  return parent.createFolder(name);
 }
+function imagesFolder_()     { return driveFolder_(IMAGE_FOLDER_NAME); }
+function postImagesFolder_() { return driveFolder_(POST_IMAGE_FOLDER_NAME); }
 
-/** รับรูปเป็น data URL (base64) จากฝั่งเว็บ อัปโหลดขึ้น Drive แล้วคืนลิงก์ที่ใช้เป็น <img src> ได้ตรง ๆ */
-function uploadQuestionImage(body) {
-  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
-
-  const dataUrl = String(body.dataUrl || '');
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+/** รับรูปเป็น data URL (base64) จากฝั่งเว็บ อัปโหลดขึ้น Drive โฟลเดอร์ที่ระบุ แล้วคืนลิงก์ที่ใช้เป็น <img src> ได้ตรง ๆ */
+function uploadImageToDrive_(folder, dataUrl, filename) {
+  const match = String(dataUrl || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) return { ok: false, error: 'ไฟล์รูปไม่ถูกต้อง' };
   if (match[2].length > MAX_IMAGE_BASE64_CHARS) return { ok: false, error: 'ไฟล์รูปใหญ่เกินไป ลองย่อขนาดก่อนอัปโหลด' };
 
   const mimeType = match[1];
-  const filename = clean(String(body.filename || 'image')).replace(/[\\/:*?"<>|]/g, '_');
+  const safeName = clean(String(filename || 'image')).replace(/[\\/:*?"<>|]/g, '_');
 
   let bytes;
   try {
@@ -865,12 +868,23 @@ function uploadQuestionImage(body) {
     return { ok: false, error: 'อ่านไฟล์รูปไม่สำเร็จ' };
   }
 
-  const blob = Utilities.newBlob(bytes, mimeType, filename);
-  const file = imagesFolder_().createFile(blob);
+  const blob = Utilities.newBlob(bytes, mimeType, safeName);
+  const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-  const url = 'https://drive.google.com/uc?export=view&id=' + file.getId();
-  return { ok: true, url: url };
+  return { ok: true, url: 'https://drive.google.com/uc?export=view&id=' + file.getId() };
+}
+
+function uploadQuestionImage(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  return uploadImageToDrive_(imagesFolder_(), body.dataUrl, body.filename);
+}
+
+/** อัปโหลดรูปแนบโพสต์บอร์ดความคิดเห็น — ผู้ใช้ที่ล็อกอินคนไหนก็โพสต์ได้ (ตามระดับสิทธิ์เดียวกับ createPost) */
+function uploadPostImage(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!email) return { ok: false, error: 'unauthorized' };
+  return uploadImageToDrive_(postImagesFolder_(), body.dataUrl, body.filename);
 }
 
 /* ══════════════════════════ ยูทิลิตี ══════════════════════════ */

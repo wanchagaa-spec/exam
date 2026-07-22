@@ -106,6 +106,14 @@ function renderHeader(active){
             <label for="composeText">ข้อความ <span class="req">*</span></label>
             <textarea id="composeText" placeholder="เขียนอะไรบางอย่าง…" required maxlength="1000"></textarea>
           </div>
+          <div class="field">
+            <input type="file" id="composeImageInput" accept="image/*" class="hidden">
+            <div id="composeImagePreviewWrap" class="compose-img-preview hidden">
+              <img id="composeImagePreview" alt="">
+              <button type="button" id="composeImageRemove" aria-label="ลบรูป">✕</button>
+            </div>
+            <button class="btn s" id="composeImageBtn" type="button">📷 แนบรูป</button>
+          </div>
           <div id="composeMsg"></div>
           <button class="btn p block" type="submit">โพสต์</button>
         </form>
@@ -181,14 +189,43 @@ function renderHeader(active){
   const composeSubject = document.getElementById("composeSubject");
   const composeText = document.getElementById("composeText");
   const composeMsg = document.getElementById("composeMsg");
+  const composeImageInput = document.getElementById("composeImageInput");
+  const composeImageBtn = document.getElementById("composeImageBtn");
+  const composeImagePreviewWrap = document.getElementById("composeImagePreviewWrap");
+  const composeImagePreview = document.getElementById("composeImagePreview");
+  const composeImageRemove = document.getElementById("composeImageRemove");
+  let composeImageFile = null;
 
   if (typeof SUBJECTS !== "undefined") {
     composeSubject.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
   }
 
+  function clearComposeImage(){
+    composeImageFile = null;
+    composeImageInput.value = "";
+    composeImagePreviewWrap.classList.add("hidden");
+    composeImageBtn.classList.remove("hidden");
+  }
+
+  composeImageBtn.onclick = () => composeImageInput.click();
+  composeImageInput.onchange = () => {
+    const file = composeImageInput.files[0];
+    if (!file) return;
+    composeImageFile = file;
+    const reader = new FileReader();
+    reader.onload = () => {
+      composeImagePreview.src = reader.result;
+      composeImagePreviewWrap.classList.remove("hidden");
+      composeImageBtn.classList.add("hidden");
+    };
+    reader.readAsDataURL(file);
+  };
+  composeImageRemove.onclick = clearComposeImage;
+
   function openCompose(){
     composeMsg.innerHTML = "";
     composeText.value = "";
+    clearComposeImage();
     composeMask.classList.remove("hidden");
     composeText.focus();
   }
@@ -208,12 +245,33 @@ function renderHeader(active){
     const btn = e.target.querySelector("button[type=submit]");
     btn.disabled = true; btn.textContent = "กำลังโพสต์…";
 
-    const res = await apiCall("createPost", { email: user.email, name: user.name, subject, text });
+    let image = "";
+    if (composeImageFile){
+      btn.textContent = "กำลังอัปโหลดรูป…";
+      try {
+        const dataUrl = await resizeImageToDataUrlFit(composeImageFile, 1280);
+        const upRes = await apiCall("uploadPostImage", { email: user.email, dataUrl, filename: composeImageFile.name });
+        if (!upRes.ok){
+          btn.disabled = false; btn.textContent = "โพสต์";
+          composeMsg.innerHTML = `<div class="msg bad">${escHtml(upRes.error || "อัปโหลดรูปไม่สำเร็จ")}</div>`;
+          return;
+        }
+        image = upRes.url;
+      } catch (err) {
+        btn.disabled = false; btn.textContent = "โพสต์";
+        composeMsg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
+        return;
+      }
+      btn.textContent = "กำลังโพสต์…";
+    }
+
+    const res = await apiCall("createPost", { email: user.email, name: user.name, subject, text, image });
 
     btn.disabled = false; btn.textContent = "โพสต์";
     if (res.ok){
       composeMsg.innerHTML = '<div class="msg ok">โพสต์เรียบร้อยแล้ว</div>';
       composeText.value = "";
+      clearComposeImage();
       document.dispatchEvent(new CustomEvent("examSitePostCreated", { detail: res.post }));
       setTimeout(closeCompose, 900);
     } else {
@@ -468,6 +526,7 @@ function postCardHtml(p, viewerEmail){
       <span class="when">${postFmtTime(p.timestamp)}</span>
     </div>
     <div class="body">${escHtml(p.text)}</div>
+    ${p.image ? `<img class="post-image" src="${escHtml(p.image)}" alt="" loading="lazy">` : ""}
     <div class="actions">
       <button class="actbtn likeBtn ${p.likedByMe ? "liked" : ""}" type="button">${p.likedByMe ? "❤️" : "🤍"} ถูกใจ (${p.likeCount})</button>
       <button class="actbtn cmtToggle" type="button">💬 ความคิดเห็น (${p.commentCount})</button>
@@ -726,13 +785,19 @@ async function demoApi(action, payload){
     const name = String(payload.name || "").trim();
     const subject = String(payload.subject || "").trim();
     const text = String(payload.text || "").trim();
+    const image = String(payload.image || "").trim();
     if (!email || !name || !subject || !text) return { ok:false, error:"กรอกข้อมูลไม่ครบ" };
     const posts = demoPostsLoad();
     const post = { id: "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-                    timestamp: new Date().toISOString(), email, name, subject, text, likeCount: 0 };
+                    timestamp: new Date().toISOString(), email, name, subject, text, image, likeCount: 0 };
     posts.push(post);
     demoPostsSave(posts);
     return { ok:true, post: Object.assign({}, post, { commentCount:0, likedByMe:false }) };
+  }
+
+  if (action === "uploadPostImage"){
+    if (!String(payload.email || "").trim()) return { ok:false, error:"unauthorized" };
+    return { ok:true, url: payload.dataUrl };
   }
 
   if (action === "listPosts"){
