@@ -41,6 +41,10 @@
             <label for="p">รหัสผ่าน (อย่างน้อย 6 ตัว)</label>
             <input type="password" id="p" autocomplete="new-password" minlength="6" required>
           </div>
+          <div class="field">
+            <label for="p2">ยืนยันรหัสผ่าน</label>
+            <input type="password" id="p2" autocomplete="new-password" minlength="6" required>
+          </div>
           <button class="btn p block" type="submit">สมัครสมาชิก</button>
         </form>
         <p class="switch">มีบัญชีอยู่แล้ว? <a href="login.html">เข้าสู่ระบบ</a></p>
@@ -62,6 +66,13 @@
     const school = document.getElementById("school").value.trim();
     const email = document.getElementById("email").value.trim();
     const password = document.getElementById("p").value;
+    const password2 = document.getElementById("p2").value;
+
+    if (password !== password2){
+      document.getElementById("msg").innerHTML = '<div class="msg bad">รหัสผ่านทั้งสองช่องไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง</div>';
+      return;
+    }
+
     const btn = e.target.querySelector("button");
     btn.disabled = true; btn.textContent = "กำลังสมัคร…";
 
