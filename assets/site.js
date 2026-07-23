@@ -63,6 +63,7 @@ function renderHeader(active){
   const rightHtml = user ? `
       <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
       <a class="navicon ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
+      <a class="navicon ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
       <button class="navicon" id="bellBtn" type="button" title="แจ้งเตือน" aria-label="แจ้งเตือน">
         🔔<span class="badge hidden" id="notifBadge">0</span>
       </button>
@@ -83,6 +84,7 @@ function renderHeader(active){
     ` : `
       <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
       <a class="navicon ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
+      <a class="navicon ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
       <a href="login.html" style="display:inline-flex;align-items:center;min-height:40px;padding:0 18px;border-radius:999px;background:#fff;color:var(--accent-ink);font-weight:700;font-size:14.5px">เข้าสู่ระบบ</a>
     `;
 
