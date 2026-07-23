@@ -74,7 +74,7 @@
   let currentSort = "new";
   const filterSel = document.getElementById("filterSubject");
   filterSel.innerHTML = '<option value="">ทั้งหมดทุกวิชา</option>' +
-    SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+    visibleSubjects().map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
 
   const board = createPostBoard({
     listEl: document.getElementById("list"),

@@ -50,7 +50,7 @@
 
   /* ── รายวิชา ── */
   const subjectMatches = qLower
-    ? SUBJECTS.filter(s => s.name.toLowerCase().includes(qLower) || (s.desc || "").toLowerCase().includes(qLower))
+    ? visibleSubjects().filter(s => s.name.toLowerCase().includes(qLower) || (s.desc || "").toLowerCase().includes(qLower))
     : [];
   const subjectBox = document.getElementById("subjectResults");
   subjectBox.innerHTML = subjectMatches.length

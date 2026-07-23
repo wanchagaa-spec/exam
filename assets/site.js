@@ -35,6 +35,12 @@ function escHtml(s){
   return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }
 
+/** วิชาที่เปิดให้นักเรียนเห็น/เลือกได้ (visible !== false ใน assets/demo-data.js) — ใช้แสดงลิสต์วิชาทุกจุด
+    ส่วนแอดมิน (admin.html/admin-add.html/admin-import.html) ยังใช้ SUBJECTS เต็มทุกวิชาตามเดิม จัดการคลังข้อสอบวิชาที่ซ่อนอยู่ได้ */
+function visibleSubjects(){
+  return (typeof SUBJECTS !== "undefined" ? SUBJECTS : []).filter(s => s.visible !== false);
+}
+
 const NOTIF_LABEL = { like: "กดถูกใจโพสต์ของคุณ", comment: "แสดงความคิดเห็นในโพสต์ของคุณ" };
 function avatarHtml(user, size){
   size = size || 34;
@@ -86,6 +92,7 @@ function renderHeader(active){
         ${leftHtml}
         <form class="searchbar" id="headerSearchForm">
           <input type="search" id="headerSearchInput" placeholder="ค้นหาวิชาหรือโพสต์…" value="${escHtml(params.get("q") || "")}" aria-label="ค้นหา">
+          <button type="submit" class="searchbtn" aria-label="ค้นหา">🔍</button>
         </form>
         <div class="navicons">${rightHtml}</div>
       </div>
@@ -197,7 +204,7 @@ function renderHeader(active){
   let composeImageFile = null;
 
   if (typeof SUBJECTS !== "undefined") {
-    composeSubject.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+    composeSubject.innerHTML = visibleSubjects().map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
   }
 
   function clearComposeImage(){

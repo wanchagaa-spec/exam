@@ -65,11 +65,16 @@ header.site{position:sticky;top:0;z-index:50;
   background:var(--holo);
   box-shadow:0 2px 16px rgba(255,111,176,.2)}
 .nav{display:flex;align-items:center;gap:12px;padding:12px 20px;max-width:var(--wrap);margin:0 auto}
-.searchbar{flex:1;min-width:0}
-.searchbar input{width:100%;height:42px;padding:0 18px;border:none;border-radius:999px;
+.searchbar{flex:1;min-width:0;display:flex;gap:6px}
+.searchbar input{flex:1;min-width:0;height:42px;padding:0 18px;border:none;border-radius:999px;
   background:rgba(255,255,255,.55);color:var(--accent-ink);font:inherit;font-size:14.5px}
 .searchbar input::placeholder{color:rgba(74,42,92,.55)}
 .searchbar input:focus{outline:none;background:rgba(255,255,255,.8)}
+.searchbar input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.searchbtn{flex:none;width:42px;height:42px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,.55);color:var(--accent-ink);font-size:16px;
+  display:flex;align-items:center;justify-content:center}
+.searchbtn:hover{background:rgba(255,255,255,.8)}
 .navicons{display:flex;align-items:center;gap:6px;position:relative;flex:none}
 .navicon{display:flex;align-items:center;justify-content:center;position:relative;
   width:44px;height:44px;border-radius:50%;font-size:19px;color:var(--accent-ink);background:none;border:none;

@@ -2,16 +2,18 @@
    ข้อมูลตัวอย่าง (placeholder) — ลูกค้ายังไม่ได้ส่งเนื้อหาจริงมา
    แก้ค่าพวกนี้ หรือดึงจาก Google Sheet ผ่าน Apps Script แทนได้ภายหลัง
    ═══════════════════════════════════════════════════════════════ */
+/* visible:false = ซ่อนจากหน้าเว็บฝั่งนักเรียนไว้ก่อน (ยังเลือกทำข้อสอบ/เห็นในลิสต์ไม่ได้) แต่แอดมินยังจัดการคลังข้อสอบของวิชานั้นได้ตามปกติ
+   พร้อมเปิดใช้งานเมื่อไหร่ก็แก้เป็น true — ใช้ visibleSubjects() (assets/site.js) ตอนแสดงลิสต์ให้นักเรียนเห็น */
 const SUBJECTS = [
-  { slug:"math1",       name:"คณิตศาสตร์ประยุกต์ 1 (A-Level)", icon:"📐", desc:"พีชคณิต เรขาคณิต สถิติ และแคลคูลัสเบื้องต้น", minutes:90 },
-  { slug:"math2",       name:"คณิตศาสตร์ประยุกต์ 2 (A-Level)", icon:"📊", desc:"พีชคณิต สถิติ ตรรกศาสตร์ และลำดับอนุกรม",     minutes:90 },
-  { slug:"applied-sci", name:"วิทยาศาสตร์ประยุกต์ (A-Level)",  icon:"🔬", desc:"วิทยาศาสตร์พื้นฐานรอบด้านสำหรับทุกสายวิชา",   minutes:90 },
-  { slug:"physics",     name:"ฟิสิกส์ (A-Level)",              icon:"⚛️", desc:"กลศาสตร์ ไฟฟ้า คลื่น และฟิสิกส์อะตอม",         minutes:90 },
-  { slug:"chemistry",   name:"เคมี (A-Level)",                 icon:"🧪", desc:"โครงสร้างอะตอม พันธะเคมี และเคมีอินทรีย์",     minutes:90 },
-  { slug:"biology",     name:"ชีววิทยา (A-Level)",             icon:"🧬", desc:"เซลล์ พันธุศาสตร์ และระบบร่างกายมนุษย์",      minutes:90 },
-  { slug:"social",      name:"สังคมศึกษา (A-Level)",           icon:"🌏", desc:"ศาสนา หน้าที่พลเมือง เศรษฐศาสตร์ และประวัติศาสตร์", minutes:90 },
-  { slug:"thai",        name:"ภาษาไทย (A-Level)",              icon:"📖", desc:"หลักภาษา การอ่าน การเขียน และวรรณคดี",         minutes:90 },
-  { slug:"english",     name:"ภาษาอังกฤษ (A-Level)",           icon:"🔤", desc:"Grammar, Vocabulary และ Reading Comprehension", minutes:90 }
+  { slug:"math1",       name:"คณิตศาสตร์ประยุกต์ 1 (A-Level)", icon:"📐", desc:"พีชคณิต เรขาคณิต สถิติ และแคลคูลัสเบื้องต้น", minutes:90, visible:true },
+  { slug:"math2",       name:"คณิตศาสตร์ประยุกต์ 2 (A-Level)", icon:"📊", desc:"พีชคณิต สถิติ ตรรกศาสตร์ และลำดับอนุกรม",     minutes:90, visible:false },
+  { slug:"applied-sci", name:"วิทยาศาสตร์ประยุกต์ (A-Level)",  icon:"🔬", desc:"วิทยาศาสตร์พื้นฐานรอบด้านสำหรับทุกสายวิชา",   minutes:90, visible:false },
+  { slug:"physics",     name:"ฟิสิกส์ (A-Level)",              icon:"⚛️", desc:"กลศาสตร์ ไฟฟ้า คลื่น และฟิสิกส์อะตอม",         minutes:90, visible:false },
+  { slug:"chemistry",   name:"เคมี (A-Level)",                 icon:"🧪", desc:"โครงสร้างอะตอม พันธะเคมี และเคมีอินทรีย์",     minutes:90, visible:false },
+  { slug:"biology",     name:"ชีววิทยา (A-Level)",             icon:"🧬", desc:"เซลล์ พันธุศาสตร์ และระบบร่างกายมนุษย์",      minutes:90, visible:false },
+  { slug:"social",      name:"สังคมศึกษา (A-Level)",           icon:"🌏", desc:"ศาสนา หน้าที่พลเมือง เศรษฐศาสตร์ และประวัติศาสตร์", minutes:90, visible:false },
+  { slug:"thai",        name:"ภาษาไทย (A-Level)",              icon:"📖", desc:"หลักภาษา การอ่าน การเขียน และวรรณคดี",         minutes:90, visible:false },
+  { slug:"english",     name:"ภาษาอังกฤษ (A-Level)",           icon:"🔤", desc:"Grammar, Vocabulary และ Reading Comprehension", minutes:90, visible:false }
 ];
 
 /* หมวด/สาระของแต่ละวิชา — ใช้เป็นลิสต์ให้เลือกตอนติดแท็กข้อสอบในหน้าแอดมิน

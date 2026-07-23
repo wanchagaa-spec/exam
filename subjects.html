@@ -36,7 +36,7 @@
   renderHeader("subjects.html");
   renderFooter();
 
-  document.getElementById("subjectList").innerHTML = SUBJECTS.map(s => `
+  document.getElementById("subjectList").innerHTML = visibleSubjects().map(s => `
     <a class="card" href="exam.html?subject=${s.slug}">
       <span class="tag">${s.icon} <span id="stat_${s.slug}">กำลังโหลด…</span></span>
       <h3>${s.name}</h3>
@@ -45,7 +45,7 @@
     </a>
   `).join("");
 
-  SUBJECTS.forEach(async s => {
+  visibleSubjects().forEach(async s => {
     const sum = await blueprintSummary(s.slug);
     const el = document.getElementById("stat_" + s.slug);
     if (!el) return;
