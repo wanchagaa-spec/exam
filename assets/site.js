@@ -27,6 +27,7 @@ const NAV = [
   { href:"index.html",     label:"หน้าแรก" },
   { href:"subjects.html",  label:"รายวิชา / ทำข้อสอบ" },
   { href:"news.html",      label:"บอร์ดความคิดเห็น" },
+  { href:"trophy.html",    label:"🏆 มหาเทพพยายาม" },
   { href:"downloads.html", label:"ดาวน์โหลดเอกสาร" },
   { href:"contact.html",   label:"ติดต่อเรา" }
 ];
@@ -539,11 +540,249 @@ function demoResultsAdd(entry){
   demoResultsSave(list);
 }
 
+/* โหมดตัวอย่าง: ถ้วยความพยายาม — ตรรกะเดียวกับฝั่งเซิร์ฟเวอร์ใน gas/Code.gs (isValidTrophyRound_/rankTrophyRows_) */
+function demoIsValidTrophyRound(r){
+  return (Number(r.percent) || 0) > 50 && (Number(r.usedSeconds) || 0) >= 3600 && !r.auto;
+}
+function demoMonthKey(iso){
+  const d = new Date(iso);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+function demoNameForEmail(email){
+  const u = demoUsers().find(x => x.email === email);
+  return u ? u.name : email;
+}
+function demoRankTrophyRows(rows, limit){
+  const byEmail = {};
+  rows.forEach(r => {
+    const email = r.email;
+    if (!byEmail[email]) byEmail[email] = { email, count: 0, percentSum: 0 };
+    byEmail[email].count += 1;
+    byEmail[email].percentSum += Number(r.percent) || 0;
+  });
+  const list = Object.keys(byEmail).map(email => {
+    const e = byEmail[email];
+    return { email, name: demoNameForEmail(email), count: e.count, avgPercent: Math.round((e.percentSum / e.count) * 10) / 10 };
+  });
+  list.sort((a, b) => (b.count - a.count) || (b.avgPercent - a.avgPercent));
+
+  let rank = 0, shown = 0, prevKey = null;
+  const out = [];
+  for (let i = 0; i < list.length; i++){
+    const entry = list[i];
+    const key = entry.count + "|" + entry.avgPercent;
+    if (key !== prevKey){ rank = shown + 1; prevKey = key; }
+    if (rank > limit) break;
+    entry.rank = rank;
+    out.push(entry);
+    shown++;
+  }
+  return out;
+}
+function demoTrophyAction(action, payload){
+  const validRows = demoResultsLoad().filter(demoIsValidTrophyRound);
+
+  if (action === "trophyLeaderboard"){
+    const targetMonth = String(payload.month || "").trim() || demoMonthKey(new Date().toISOString());
+    const rows = validRows.filter(r => demoMonthKey(r.timestamp) === targetMonth);
+    return { ok:true, month: targetMonth, entries: demoRankTrophyRows(rows, 10) };
+  }
+  if (action === "trophyAllTime"){
+    return { ok:true, entries: demoRankTrophyRows(validRows, 10) };
+  }
+  // trophyHallOfFame
+  const currentMonth = demoMonthKey(new Date().toISOString());
+  const byMonth = {};
+  validRows.forEach(r => {
+    const month = demoMonthKey(r.timestamp);
+    if (month === currentMonth) return;
+    (byMonth[month] = byMonth[month] || []).push(r);
+  });
+  const months = Object.keys(byMonth).sort().reverse().map(month => {
+    const ranked = demoRankTrophyRows(byMonth[month], 10);
+    return { month, champions: ranked.filter(e => e.rank === 1) };
+  });
+  return { ok:true, months };
+}
+
 /* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
 async function blueprintSummary(subject){
   const res = await apiCall("blueprint", { subject });
   const sections = (res.ok && res.sections) || [];
   return { sections, total: sections.reduce((s,x) => s + (x.count||0), 0) };
+}
+
+/* ══════════════════════════ ตราสัญลักษณ์ "มหาเทพพยายาม" (ถ้วยความพยายาม) ══════════════════════════
+   วาดเป็น SVG ล้วน ไม่มีไฟล์รูปแยก — พารามิเตอร์เดียวกันสร้างได้ทุกอันดับ/ทุกขนาด
+   อันดับ 1 = ทอง, อันดับ 2 = เงิน, อันดับ 3-10 = ทองแดง (ดีไซน์จากไฟล์อ้างอิงที่ลูกค้าส่งมา) */
+const BADGE_THEMES = {
+  gold:   { name:'ทอง',    light:'#fff8d6', mid:'#f0cf6a', deep:'#c9992a', dark:'#7d5a08', edge:'#3d2c03' },
+  silver: { name:'เงิน',    light:'#ffffff', mid:'#dbe3ea', deep:'#98a4ae', dark:'#5a646e', edge:'#2b323a' },
+  copper: { name:'ทองแดง', light:'#ffdcc2', mid:'#dd9059', deep:'#a85f2f', dark:'#6a3a1a', edge:'#33190a' }
+};
+const badgeThemeFor = n => n === 1 ? 'gold' : n === 2 ? 'silver' : 'copper';
+
+const BADGE_VBW = 520, BADGE_VBH = 430, BADGE_CX = 260, BADGE_CY = 205, BADGE_VB = `0 0 ${BADGE_VBW} ${BADGE_VBH}`;
+const BADGE_D2R = Math.PI / 180;
+function badgePt(r, a){ return [(BADGE_CX + r * Math.cos(a * BADGE_D2R)).toFixed(2), (BADGE_CY + r * Math.sin(a * BADGE_D2R)).toFixed(2)]; }
+
+function badgeGearPath(rTip, rRoot, teeth){
+  const step = 360 / teeth, tipH = step * 0.22, rootH = step * 0.34;
+  let d = '';
+  for (let i = 0; i < teeth; i++){
+    const a = i * step;
+    const p1 = badgePt(rRoot, a - rootH), p2 = badgePt(rTip, a - tipH),
+          p3 = badgePt(rTip, a + tipH),   p4 = badgePt(rRoot, a + rootH),
+          p5 = badgePt(rRoot, a + step - rootH);
+    d += (i === 0 ? `M${p1}` : `L${p1}`);
+    d += `L${p2}A${rTip},${rTip} 0 0 1 ${p3}L${p4}A${rRoot},${rRoot} 0 0 1 ${p5}`;
+  }
+  return d + 'Z';
+}
+function badgeArcPath(r, a0, a1){
+  const p0 = badgePt(r, a0), p1 = badgePt(r, a1);
+  const large = ((a1 - a0 + 360) % 360) > 180 ? 1 : 0;
+  return `M${p0}A${r},${r} 0 ${large} 1 ${p1}`;
+}
+function badgeCurvedText(str, r){
+  const chars = [...String(str)];
+  if (!chars.length) return '';
+  const fs = chars.length > 9 ? 24 : 30;
+  const step = chars.length > 9 ? 9.5 : 11.5;
+  const start = 90 + (chars.length - 1) * step / 2;
+  return chars.map((c, i) => {
+    const a = start - i * step;
+    const p = badgePt(r, a);
+    return `<text x="0" y="0" font-size="${fs}" text-anchor="middle" dominant-baseline="central"
+      transform="translate(${p[0]},${p[1]}) rotate(${(a - 90).toFixed(2)})">${escHtml(c)}</text>`;
+  }).join('');
+}
+function badgeStar(x, y, s){
+  return `<path d="M${x} ${y-s}Q${x+s*0.22} ${y-s*0.22} ${x+s} ${y}Q${x+s*0.22} ${y+s*0.22} ${x} ${y+s}Q${x-s*0.22} ${y+s*0.22} ${x-s} ${y}Q${x-s*0.22} ${y-s*0.22} ${x} ${y-s}Z"/>`;
+}
+
+let __badgeUidCounter = 0;
+/** สร้างเหรียญตราสัญลักษณ์อันดับเป็น <svg> ทั้งชิ้น — rank: 1-10 ขึ้นไป (>=3 ใช้ธีมทองแดงเดียวกันหมด), size: ความกว้างที่จะแสดงผล (px) */
+function rankBadgeSvg(rank, size){
+  const num = Number(rank) || 0;
+  const t = BADGE_THEMES[badgeThemeFor(num)];
+  const uid = 'b' + (++__badgeUidCounter);
+  const g = s => `${uid}${s}`;
+  const digits = String(num);
+  const fs = digits.length > 1 ? 118 : 158;
+
+  const feathers = [
+    { a:-12, l:166 }, { a:-26, l:148 }, { a:-40, l:126 }, { a:-54, l:102 }
+  ].map(f =>
+    `<g transform="rotate(${f.a})"><path d="M0 -8Q${f.l*0.45} -${f.l*0.11} ${f.l} -${f.l*0.24}Q${f.l*0.5} ${f.l*0.055} 0 10Z"/></g>`
+  ).join('');
+  const wing = `<g transform="translate(342,148)">${feathers}</g>`;
+
+  const circuit = `
+    <path d="M-119 -48l-14 14v22h-14" />
+    <path d="M-124 -70h-18l-12 12v16" />
+    <path d="M-115 14h-20l-12 -14" />
+    <circle cx="-147" cy="-12" r="3.4"/><circle cx="-147" cy="0" r="3.4"/>
+    <circle cx="-154" cy="-42" r="3.4"/>`;
+
+  const rivets = [160, 200, 250, 290, 340, 20].map(a => {
+    const p = badgePt(152, a);
+    return `<circle cx="${p[0]}" cy="${p[1]}" r="7" fill="url(#${g('riv')})" stroke="${t.edge}" stroke-width="1.5"/>
+            <circle cx="${p[0]}" cy="${p[1]}" r="2.6" fill="${t.edge}" opacity=".55"/>`;
+  }).join('');
+
+  const w = size || BADGE_VBW, h = Math.round(w * BADGE_VBH / BADGE_VBW);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${BADGE_VB}" width="${w}" height="${h}" role="img" aria-label="อันดับ ${num} มหาเทพพยายาม">
+<defs>
+  <linearGradient id="${g('metal')}" x1="0" y1="0" x2="0.35" y2="1">
+    <stop offset="0" stop-color="${t.light}"/><stop offset=".16" stop-color="${t.mid}"/>
+    <stop offset=".33" stop-color="${t.light}"/><stop offset=".5" stop-color="${t.deep}"/>
+    <stop offset=".68" stop-color="${t.mid}"/><stop offset=".85" stop-color="${t.dark}"/>
+    <stop offset="1" stop-color="${t.deep}"/>
+  </linearGradient>
+  <linearGradient id="${g('metal2')}" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="${t.light}"/><stop offset=".45" stop-color="${t.mid}"/>
+    <stop offset=".7" stop-color="${t.deep}"/><stop offset="1" stop-color="${t.dark}"/>
+  </linearGradient>
+  <linearGradient id="${g('steel')}" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0" stop-color="#7c8896"/><stop offset=".3" stop-color="#cfd8e0"/>
+    <stop offset=".55" stop-color="#5d6874"/><stop offset=".8" stop-color="#9aa6b3"/>
+    <stop offset="1" stop-color="#39424c"/>
+  </linearGradient>
+  <linearGradient id="${g('band')}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#3b444f"/><stop offset=".5" stop-color="#232a33"/><stop offset="1" stop-color="#161b22"/>
+  </linearGradient>
+  <linearGradient id="${g('riv')}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${t.light}"/><stop offset="1" stop-color="${t.dark}"/>
+  </linearGradient>
+  <radialGradient id="${g('disc')}" cx=".38" cy=".3" r=".85">
+    <stop offset="0" stop-color="#4f7fc4"/><stop offset=".55" stop-color="#2c5697"/><stop offset="1" stop-color="#122b52"/>
+  </radialGradient>
+  <linearGradient id="${g('sheen')}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity=".38"/><stop offset=".5" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+  <filter id="${g('sh')}" x="-25%" y="-25%" width="150%" height="150%">
+    <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity=".55"/>
+  </filter>
+</defs>
+<g filter="url(#${g('sh')})">
+  <g fill="url(#${g('steel')})" stroke="#39424c" stroke-width="2" stroke-linejoin="round">
+    ${wing}
+    <g transform="translate(${BADGE_VBW},0) scale(-1,1)">${wing}</g>
+  </g>
+  <path d="M${BADGE_CX-46} ${BADGE_CY+150}h92l-14 46-32 26-32-26z" fill="url(#${g('metal2')})" stroke="${t.edge}" stroke-width="2.5"/>
+  <path d="${badgeGearPath(178,158,24)}" fill="url(#${g('metal')})" stroke="${t.edge}" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="160" fill="none" stroke="${t.edge}" stroke-width="2" opacity=".7"/>
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="157" fill="url(#${g('band')})"/>
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="157" fill="url(#${g('sheen')})"/>
+  <g transform="translate(${BADGE_CX},${BADGE_CY})" fill="none">
+    <g stroke="#7b8795" stroke-width="2.2" fill="#7b8795" opacity=".85">${circuit}</g>
+    <g transform="scale(-1,1)" stroke="#7b8795" stroke-width="2.2" fill="#7b8795" opacity=".85">${circuit}</g>
+  </g>
+  <g fill="none" stroke-linecap="butt">
+    <path d="${badgeArcPath(134,150,200)}" stroke="url(#${g('metal2')})" stroke-width="15"/>
+    <path d="${badgeArcPath(134,340,30)}" stroke="url(#${g('metal2')})" stroke-width="15"/>
+    <path d="${badgeArcPath(134,205,245)}" stroke="url(#${g('steel')})" stroke-width="13"/>
+    <path d="${badgeArcPath(134,295,335)}" stroke="url(#${g('steel')})" stroke-width="13"/>
+  </g>
+  <g fill="url(#${g('metal2')})" stroke="${t.edge}" stroke-width="1.2">
+    ${badgeStar(BADGE_CX-40, BADGE_CY-124, 13)}${badgeStar(BADGE_CX, BADGE_CY-132, 19)}${badgeStar(BADGE_CX+40, BADGE_CY-124, 13)}
+  </g>
+  ${rivets}
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="115" fill="none" stroke="${t.edge}" stroke-width="3" opacity=".8"/>
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="112" fill="url(#${g('metal')})" stroke="${t.edge}" stroke-width="2.5"/>
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="100" fill="url(#${g('disc')})" stroke="${t.edge}" stroke-width="3"/>
+  <circle cx="${BADGE_CX}" cy="${BADGE_CY}" r="93" fill="none" stroke="#ffffff" stroke-width="1.5" opacity=".16"/>
+  <text x="${BADGE_CX}" y="${BADGE_CY}" text-anchor="middle" dominant-baseline="central"
+        font-family="'Arial Black',Impact,'Segoe UI',sans-serif" font-weight="900"
+        font-size="${fs}" letter-spacing="${digits.length>1?-6:0}"
+        fill="url(#${g('metal')})" stroke="${t.edge}" stroke-width="3" paint-order="stroke">${digits}</text>
+  <g font-family="'Arial Black',Impact,'Segoe UI',sans-serif" font-weight="900"
+     fill="url(#${g('metal2')})" stroke="${t.edge}" stroke-width="2.2" paint-order="stroke">
+    ${badgeCurvedText('มหาเทพพยายาม', 134)}
+  </g>
+</g>
+</svg>`;
+}
+
+/** โหลดอันดับถ้วยความพยายามเดือนปัจจุบันครั้งเดียวต่อการโหลดหน้า แล้วแคชเป็น Map<email, rank> ให้จุดอื่นเรียกใช้ซ้ำได้ทันที */
+let __trophyRankPromise = null;
+function trophyRankMap(){
+  if (!__trophyRankPromise){
+    __trophyRankPromise = apiCall("trophyLeaderboard", {}).then(res => {
+      const map = new Map();
+      if (res.ok) (res.entries || []).forEach(e => map.set(String(e.email).toLowerCase(), e.rank));
+      return map;
+    }).catch(() => new Map());
+  }
+  return __trophyRankPromise;
+}
+/** คืน HTML ตราสัญลักษณ์ถ้าอีเมลนี้ติดอันดับเดือนนี้ ไม่ติดคืนสตริงว่าง — ต้อง await trophyRankMap() ให้เสร็จก่อนเรียก */
+function trophyBadgeHtml(email, rankMap, size){
+  const rank = rankMap && rankMap.get(String(email || "").toLowerCase());
+  if (!rank) return "";
+  return `<span class="rank-badge" title="อันดับ ${rank} มหาเทพพยายามประจำเดือนนี้">${rankBadgeSvg(rank, size)}</span>`;
 }
 
 /* ── การ์ดโพสต์บอร์ดความคิดเห็น (ใช้ร่วมกัน 3 หน้า: news.html, account.html, search.html)
@@ -555,14 +794,14 @@ function postFmtTime(iso){
   try { return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }); }
   catch(e){ return ""; }
 }
-function postCardHtml(p, viewerEmail){
+function postCardHtml(p, viewerEmail, rankMap){
   const meta = postSubjectMeta(p.subject);
   const mine = p.email === viewerEmail;
   return `
   <div class="post" data-id="${escHtml(p.id)}">
     <div class="head">
       <div>
-        <div class="who">${escHtml(p.name)}</div>
+        <div class="who">${escHtml(p.name)}${trophyBadgeHtml(p.email, rankMap, 18)}</div>
         ${meta ? `<span class="tag" style="margin-top:6px">${meta.icon} ${escHtml(meta.name)}</span>` : ""}
       </div>
       <span class="when">${postFmtTime(p.timestamp)}</span>
@@ -598,12 +837,13 @@ function createPostBoard(options){
   const expanded = new Set();
   const commentsCache = {};
 
-  function render(posts){
+  async function render(posts){
     if (!posts.length){
       listEl.innerHTML = `<p class="muted">${emptyMessage}</p>`;
       return;
     }
-    listEl.innerHTML = posts.map(p => postCardHtml(p, user.email)).join("");
+    const rankMap = await trophyRankMap();
+    listEl.innerHTML = posts.map(p => postCardHtml(p, user.email, rankMap)).join("");
     listEl.querySelectorAll(".post").forEach(card => {
       const id = card.dataset.id;
       card.querySelector(".likeBtn").onclick = () => onToggleLike(id, card);
@@ -640,14 +880,14 @@ function createPostBoard(options){
   async function renderComments(id, card){
     const box = card.querySelector(".commentList");
     box.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังโหลด…</p>';
-    const res = await apiCall("listComments", { postId: id });
+    const [res, rankMap] = await Promise.all([apiCall("listComments", { postId: id }), trophyRankMap()]);
     commentsCache[id] = (res.ok && res.comments) || [];
     const comments = commentsCache[id];
     box.innerHTML = comments.length
       ? comments.map(c => `
         <div class="comment" data-id="${escHtml(c.id)}">
           <div style="display:flex;justify-content:space-between;gap:8px">
-            <span class="who">${escHtml(c.name)}</span>
+            <span class="who">${escHtml(c.name)}${trophyBadgeHtml(c.email, rankMap, 15)}</span>
             <span class="when">${postFmtTime(c.timestamp)}</span>
           </div>
           <div class="txt">${escHtml(c.text)}</div>
@@ -776,6 +1016,10 @@ async function demoApi(action, payload){
       .filter(r => r.email === email)
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     return { ok:true, results };
+  }
+
+  if (action === "trophyLeaderboard" || action === "trophyAllTime" || action === "trophyHallOfFame"){
+    return demoTrophyAction(action, payload);
   }
 
   if (action === "uploadQuestionImage"){

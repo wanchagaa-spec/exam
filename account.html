@@ -24,6 +24,11 @@
   .examrow .when{font-size:13px;color:var(--muted2);margin-top:2px}
   .examrow .score{font-size:14.5px;margin:6px 0}
   .examrow .foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted2)}
+  .profilecard .who h1{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+  .trophybanner{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:14px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .trophybanner .msg{font-size:14.5px}
+  .trophybanner a{font-weight:700;font-size:13.5px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -44,6 +49,8 @@
         </div>
       </div>
       <div id="avatarMsg"></div>
+
+      <div id="trophyBanner" class="trophybanner hidden"></div>
 
       <div id="examStats" class="statsline hidden"></div>
 
@@ -75,6 +82,10 @@
   const user = getSession();
 
   document.getElementById("hi").textContent = user.name;
+  trophyRankMap().then(rankMap => {
+    const badge = trophyBadgeHtml(user.email, rankMap, 34);
+    if (badge) document.getElementById("hi").innerHTML = `${escHtml(user.name)}${badge}`;
+  });
   document.getElementById("profile").innerHTML =
     `${escHtml(user.email || "")}${user.school ? " · " + escHtml(user.school) : ""}${user.age ? " · อายุ " + escHtml(String(user.age)) + " ปี" : ""}`;
 
@@ -179,6 +190,35 @@
     box.innerHTML = results.length
       ? results.map(examRowHtml).join("")
       : '<p class="muted">ยังไม่เคยทำข้อสอบ ไปเลือกวิชาที่ต้องการได้ที่หน้า "รายวิชา"</p>';
+
+    loadTrophyBanner(results);
+  }
+
+  /* ── ป้ายกระตุ้น: สรุปสถานะถ้วยความพยายามเดือนนี้ของตัวเอง ── */
+  function isValidTrophyRound(r){
+    return r.percent > 50 && r.usedSeconds >= 3600 && !r.auto;
+  }
+  async function loadTrophyBanner(results){
+    const banner = document.getElementById("trophyBanner");
+    const now = new Date();
+    const thisMonth = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+    const myCount = results.filter(r => isValidTrophyRound(r) && r.timestamp.slice(0, 7) === thisMonth).length;
+
+    const lb = await apiCall("trophyLeaderboard", {});
+    if (!lb.ok){ banner.classList.add("hidden"); return; }
+    const entries = lb.entries || [];
+    const mine = entries.find(e => e.email === user.email.toLowerCase());
+
+    let html;
+    if (mine){
+      html = `<span class="msg">🏆 อันดับ <b>${mine.rank}</b> มหาเทพพยายามประจำเดือนนี้! ทำไปแล้ว ${myCount} รอบที่นับได้</span>`;
+    } else {
+      const cutoff = entries.length ? entries[entries.length - 1].count : null;
+      const cutoffText = cutoff ? `อันดับ 10 ตอนนี้อยู่ที่ ${cutoff} รอบ` : "ยังไม่มีใครติดอันดับเดือนนี้ เป็นคนแรกได้เลย!";
+      html = `<span class="msg">เดือนนี้ทำไปแล้ว <b>${myCount}</b> รอบที่นับได้ · ${cutoffText}</span>`;
+    }
+    banner.innerHTML = html + '<a href="trophy.html">ดูอันดับทั้งหมด →</a>';
+    banner.classList.remove("hidden");
   }
 
   loadHistory();

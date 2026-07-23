@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>มหาเทพพยายาม — ถ้วยความพยายาม</title>
+<meta name="description" content="อันดับนักเรียนที่ทำข้อสอบฝึกฝนสม่ำเสมอที่สุด — ถ้วยความพยายาม มหาเทพพยายาม">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/trophy.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .tabbar{display:flex;gap:22px;margin-bottom:22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tabbtn{background:none;border:none;border-bottom:2px solid transparent;padding:10px 2px;
+    font-weight:700;font-size:15px;color:var(--muted);cursor:pointer}
+  .tabbtn.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .rankrow{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r-lg);padding:12px 18px;margin-bottom:10px}
+  .rankrow.mine{border-color:var(--accent);background:rgba(255,111,176,.06)}
+  .rankrow .badgebox{flex:none;width:52px;display:flex;justify-content:center}
+  .rankrow .info{flex:1;min-width:0}
+  .rankrow .name{font-weight:700;font-size:15px}
+  .rankrow .meta{font-size:13px;color:var(--muted2);margin-top:2px}
+  .hof-month{margin-bottom:26px}
+  .hof-month h3{font-size:15.5px;margin-bottom:10px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:20px">
+    <div class="wrap">
+      <span class="eyebrow">🏆 ถ้วยความพยายาม</span>
+      <h1>มหาเทพพยายาม</h1>
+      <p class="lead">อันดับนักเรียนที่ตั้งใจฝึกทำข้อสอบสม่ำเสมอที่สุด — นับเฉพาะรอบที่ใช้เวลาไม่ต่ำกว่า 1 ชั่วโมง ตอบครบทุกข้อ และได้คะแนนเกิน 50%</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap" style="max-width:680px;margin:0 auto">
+
+      <div class="tabbar">
+        <button class="tabbtn on" id="tabBtnMonth" type="button">อันดับเดือนนี้</button>
+        <button class="tabbtn" id="tabBtnAllTime" type="button">แรงก์สะสมตลอดกาล</button>
+        <button class="tabbtn" id="tabBtnHof" type="button">หอเกียรติยศ</button>
+      </div>
+
+      <div id="tabMonth">
+        <p class="muted" id="monthLabel" style="margin-bottom:16px;font-size:14px"></p>
+        <div id="monthList"></div>
+      </div>
+
+      <div id="tabAllTime" class="hidden">
+        <p class="muted" style="margin-bottom:16px;font-size:14px">รวมทุกเดือนตั้งแต่เริ่มใช้เว็บ ไม่มีการรีเซต</p>
+        <div id="allTimeList"></div>
+      </div>
+
+      <div id="tabHof" class="hidden">
+        <p class="muted" style="margin-bottom:16px;font-size:14px">อันดับ 1 ของแต่ละเดือนที่ผ่านมาแล้ว</p>
+        <div id="hofList"></div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+(function(){
+  "use strict";
+  renderHeader("trophy.html");
+  renderFooter();
+
+  const user = getSession();
+  const viewerEmail = user ? user.email.toLowerCase() : "";
+  const THAI_MONTHS = ["", "ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  function fmtMonth(key){
+    const [y, m] = key.split("-").map(Number);
+    return THAI_MONTHS[m] + " " + (y + 543);
+  }
+
+  function rankListHtml(entries){
+    if (!entries.length) return '<p class="muted">ยังไม่มีใครติดอันดับ</p>';
+    return entries.map(e => `
+      <div class="rankrow ${e.email === viewerEmail ? "mine" : ""}">
+        <div class="badgebox">${rankBadgeSvg(e.rank, 44)}</div>
+        <div class="info">
+          <div class="name">${escHtml(e.name)}</div>
+          <div class="meta">ทำไปแล้ว ${e.count} รอบ · คะแนนเฉลี่ย ${e.avgPercent}%</div>
+        </div>
+      </div>`).join("");
+  }
+
+  async function loadMonth(){
+    const box = document.getElementById("monthList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("trophyLeaderboard", {});
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+    document.getElementById("monthLabel").textContent = "ประจำเดือน " + fmtMonth(res.month);
+    box.innerHTML = rankListHtml(res.entries || []);
+  }
+
+  async function loadAllTime(){
+    const box = document.getElementById("allTimeList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("trophyAllTime", {});
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+    box.innerHTML = rankListHtml(res.entries || []);
+  }
+
+  async function loadHof(){
+    const box = document.getElementById("hofList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("trophyHallOfFame", {});
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+    const months = res.months || [];
+    box.innerHTML = months.length
+      ? months.map(m => `
+        <div class="hof-month">
+          <h3>${fmtMonth(m.month)}</h3>
+          ${rankListHtml(m.champions)}
+        </div>`).join("")
+      : '<p class="muted">ยังไม่มีเดือนไหนสรุปผลเสร็จ (เดือนแรกต้องรอให้จบเดือนก่อน)</p>';
+  }
+
+  function switchTab(which){
+    document.getElementById("tabMonth").classList.toggle("hidden", which !== "month");
+    document.getElementById("tabAllTime").classList.toggle("hidden", which !== "alltime");
+    document.getElementById("tabHof").classList.toggle("hidden", which !== "hof");
+    document.getElementById("tabBtnMonth").classList.toggle("on", which === "month");
+    document.getElementById("tabBtnAllTime").classList.toggle("on", which === "alltime");
+    document.getElementById("tabBtnHof").classList.toggle("on", which === "hof");
+  }
+  document.getElementById("tabBtnMonth").onclick = () => switchTab("month");
+  document.getElementById("tabBtnAllTime").onclick = () => { switchTab("alltime"); loadAllTime(); };
+  document.getElementById("tabBtnHof").onclick = () => { switchTab("hof"); loadHof(); };
+
+  loadMonth();
+})();
+</script>
+</body>
+</html>

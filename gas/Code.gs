@@ -97,6 +97,7 @@ function doGet(e) {
    (ช่วยให้การโหลดบอร์ด/รายการต่าง ๆ เร็วขึ้น โดยเฉพาะเวลามีคนใช้งานพร้อมกันหลายคน) */
 const READ_ONLY_ACTIONS = new Set([
   'login', 'blueprint', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
+  'trophyLeaderboard', 'trophyAllTime', 'trophyHallOfFame',
   'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs'
 ]);
 
@@ -131,6 +132,9 @@ function routeAction_(body) {
     case 'contact':              return contact(body);
     case 'submitExam':           return submitExam(body);
     case 'listMyResults':        return listMyResults(body);
+    case 'trophyLeaderboard':    return trophyLeaderboard(body);
+    case 'trophyAllTime':        return trophyAllTime(body);
+    case 'trophyHallOfFame':     return trophyHallOfFame(body);
     case 'createPost':           return createPost(body);
     case 'uploadPostImage':      return uploadPostImage(body);
     case 'listPosts':            return listPosts(body);
@@ -767,6 +771,93 @@ function listMyResults(body) {
   results.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   return { ok: true, results };
+}
+
+/* ══════════════════════════ ถ้วยความพยายาม "มหาเทพพยายาม" ══════════════════════════
+   1 รอบนับได้ต้องครบ 3 เงื่อนไข: ทำเวลาไม่ต่ำกว่า 1 ชม. (usedSeconds>=3600), ตอบครบทุกข้อ (ไม่ใช่ auto-submit
+   ตอนหมดเวลา — ปุ่มส่งคำตอบฝั่งเว็บบังคับตอบครบอยู่แล้วก่อนจะกดส่งเองได้ กรณีเดียวที่ไม่ครบคือหมดเวลาแล้วระบบส่งให้อัตโนมัติ),
+   และคะแนนเกิน 50% — นับรวมทุกวิชา ไม่แยกกระดาน ไม่ต้องเพิ่มคอลัมน์ใหม่ในชีต Results เลย ใช้ข้อมูลที่มีอยู่แล้วทั้งหมด */
+function isValidTrophyRound_(row) {
+  const percent = Number(row[6]) || 0;
+  const usedSeconds = Number(row[8]) || 0;
+  const autoSubmitted = row[9] === 'ใช่';
+  return percent > 50 && usedSeconds >= 3600 && !autoSubmitted;
+}
+function monthKey_(date) {
+  return Utilities.formatDate(date, ss_().getSpreadsheetTimeZone(), 'yyyy-MM');
+}
+
+/** จัดอันดับจากรายการแถว Results ที่กรองมาแล้ว (ผ่านเงื่อนไข valid round ทั้งหมด) — รวมเป็นต่ออีเมล
+    เรียงจำนวนรอบมากไปน้อย ตัดสินเสมอด้วยคะแนนเฉลี่ย% — เสมอกันสนิทได้อันดับเดียวกัน (แบบเหรียญโอลิมปิก
+    เช่น อันดับ 3 เสมอกัน 2 คน คนถัดไปเป็นอันดับ 5 ไม่ใช่ 4) คืนเฉพาะที่อันดับ ≤ limit (อาจได้มากกว่า limit คนถ้าเสมอกันที่ขอบ) */
+function rankTrophyRows_(rows, limit) {
+  const byEmail = {};
+  rows.forEach(r => {
+    const email = String(r[2]).toLowerCase();
+    if (!byEmail[email]) byEmail[email] = { email, name: String(r[3] || ''), count: 0, percentSum: 0, lastTimestamp: r[0] };
+    const entry = byEmail[email];
+    entry.count += 1;
+    entry.percentSum += Number(r[6]) || 0;
+    if (r[0] > entry.lastTimestamp) { entry.lastTimestamp = r[0]; entry.name = String(r[3] || ''); } // ชื่อล่าสุดที่ใช้
+  });
+
+  const list = Object.values(byEmail).map(e => ({
+    email: e.email, name: e.name, count: e.count,
+    avgPercent: Math.round((e.percentSum / e.count) * 10) / 10
+  }));
+  list.sort((a, b) => (b.count - a.count) || (b.avgPercent - a.avgPercent));
+
+  let rank = 0, shown = 0, prevKey = null;
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i];
+    const key = entry.count + '|' + entry.avgPercent;
+    if (key !== prevKey) { rank = shown + 1; prevKey = key; }
+    if (rank > limit) break;
+    entry.rank = rank;
+    out.push(entry);
+    shown++;
+  }
+  return out;
+}
+
+function resultsRows_() {
+  return sheet_('Results', ['timestamp', 'subject', 'email', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
+    .getDataRange().getValues().slice(1);
+}
+
+/** อันดับถ้วยความพยายามของเดือนที่ระบุ (ค่าเริ่มต้น = เดือนปัจจุบัน) — คำนวณสดจากชีต Results ไม่มีการรีเซตจริง
+    เดือนใหม่มาถึงตัวเลขก็เริ่มนับใหม่เองเพราะกรองจาก timestamp ตามปฏิทิน */
+function trophyLeaderboard(body) {
+  const targetMonth = String(body.month || '').trim() || monthKey_(new Date());
+  const rows = resultsRows_().filter(r => isValidTrophyRound_(r) && monthKey_(new Date(r[0])) === targetMonth);
+  return { ok: true, month: targetMonth, entries: rankTrophyRows_(rows, 10) };
+}
+
+/** แรงก์สะสมตลอดกาล — รวมทุกเดือนตั้งแต่เริ่มใช้เว็บ ไม่มีการรีเซต */
+function trophyAllTime(body) {
+  const rows = resultsRows_().filter(isValidTrophyRound_);
+  return { ok: true, entries: rankTrophyRows_(rows, 10) };
+}
+
+/** หอเกียรติยศ — อันดับ 1 ของทุกเดือนที่ผ่านมาแล้ว (ไม่รวมเดือนปัจจุบันที่ยังนับไม่จบ) เรียงเดือนล่าสุดก่อน */
+function trophyHallOfFame(body) {
+  const currentMonth = monthKey_(new Date());
+  const rows = resultsRows_().filter(isValidTrophyRound_);
+
+  const byMonth = {};
+  rows.forEach(r => {
+    const month = monthKey_(new Date(r[0]));
+    if (month === currentMonth) return;
+    (byMonth[month] = byMonth[month] || []).push(r);
+  });
+
+  const months = Object.keys(byMonth).sort().reverse().map(month => {
+    const ranked = rankTrophyRows_(byMonth[month], 10);
+    return { month, champions: ranked.filter(e => e.rank === 1) };
+  });
+
+  return { ok: true, months };
 }
 
 /* ══════════════════════════ แอดมิน: จัดการคลังข้อสอบ ══════════════════════════ */
