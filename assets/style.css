@@ -11,9 +11,12 @@
   --line:rgba(0,0,0,.12);
   --card:rgba(0,0,0,.03);
   --card-hi:rgba(0,0,0,.06);
-  --accent:#9c8ed0;
-  --accent2:#9c8ed0;
-  --accent-ink:#241b45;
+  --accent:#ff6fb0;
+  --accent2:#a78bfa;
+  --accent-ink:#4a2a5c;
+  /* ชมพูรุ้ง/โฮโลแกรม แบบผ้าซาตินมันวาว — ใช้เป็นพื้นหลังของ header/ปุ่มหลัก/แบนเนอร์เท่านั้น
+     (คู่กับตัวอักษรสี --accent-ink เพราะพื้นอ่อน ตัวอักษรขาวจะอ่านไม่ออก) */
+  --holo:linear-gradient(120deg,#ffd6ec 0%,#e7d6ff 26%,#d3f3ef 52%,#fff4dc 76%,#ffd6ec 100%);
   --ok:#1a9a55;
   --danger:#d92d2d;
   --r:10px;
@@ -27,8 +30,8 @@ body{
   font-family:"Sarabun",-apple-system,"Noto Sans Thai",sans-serif;
   font-size:16px;line-height:1.65;color:var(--ink);
   background:
-    radial-gradient(1100px 600px at 12% -8%, rgba(156,142,208,.08), transparent 60%),
-    radial-gradient(900px 560px at 100% 0%, rgba(156,142,208,.07), transparent 55%),
+    radial-gradient(1100px 600px at 12% -8%, rgba(255,111,176,.07), transparent 60%),
+    radial-gradient(900px 560px at 100% 0%, rgba(167,139,250,.06), transparent 55%),
     var(--bg0);
   min-height:100vh;
 }
@@ -48,43 +51,43 @@ img{max-width:100%;display:block}
   transition:.15s transform,.15s box-shadow,.15s opacity;
 }
 .btn:active{transform:scale(.98)}
-.btn.p{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;
-  box-shadow:0 8px 24px rgba(156,142,208,.35)}
-.btn.p:hover{box-shadow:0 10px 28px rgba(156,142,208,.5)}
+.btn.p{background:var(--holo);color:var(--accent-ink);
+  box-shadow:0 8px 24px rgba(255,111,176,.3)}
+.btn.p:hover{box-shadow:0 10px 28px rgba(255,111,176,.45)}
 .btn.s{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
 .btn.s:hover{background:var(--card-hi)}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 .btn.block{width:100%}
 
-/* ── หัวเว็บ / นำทาง (แถบไอคอนรวม สีชมพูธีมเดิม) ──────────────────────── */
+/* ── หัวเว็บ / นำทาง (พื้นชมพูรุ้ง/โฮโลแกรม ตัวอักษรเข้มเพื่อให้อ่านออก) ──────────────────────── */
 header.site{position:sticky;top:0;z-index:50;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  box-shadow:0 2px 16px rgba(156,142,208,.25)}
+  background:var(--holo);
+  box-shadow:0 2px 16px rgba(255,111,176,.2)}
 .nav{display:flex;align-items:center;gap:12px;padding:12px 20px;max-width:var(--wrap);margin:0 auto}
 .searchbar{flex:1;min-width:0}
 .searchbar input{width:100%;height:42px;padding:0 18px;border:none;border-radius:999px;
-  background:rgba(255,255,255,.22);color:#fff;font:inherit;font-size:14.5px}
-.searchbar input::placeholder{color:rgba(255,255,255,.8)}
-.searchbar input:focus{outline:none;background:rgba(255,255,255,.32)}
+  background:rgba(255,255,255,.55);color:var(--accent-ink);font:inherit;font-size:14.5px}
+.searchbar input::placeholder{color:rgba(74,42,92,.55)}
+.searchbar input:focus{outline:none;background:rgba(255,255,255,.8)}
 .navicons{display:flex;align-items:center;gap:6px;position:relative;flex:none}
 .navicon{display:flex;align-items:center;justify-content:center;position:relative;
-  width:44px;height:44px;border-radius:50%;font-size:19px;color:#fff;background:none;border:none;
+  width:44px;height:44px;border-radius:50%;font-size:19px;color:var(--accent-ink);background:none;border:none;
   cursor:pointer;line-height:1}
-.navicon:hover,.navicon.on{background:rgba(255,255,255,.22)}
+.navicon:hover,.navicon.on{background:rgba(74,42,92,.1)}
 /* ปุ่มโพสต์ (+) เด่นกว่าไอคอนอื่นบน header เพราะเป็นปุ่มหลักในการสร้างเนื้อหา */
 #composeBtn{width:52px;height:52px;font-size:28px;font-weight:700;
-  background:#fff;color:var(--accent-ink);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  background:#fff;color:var(--accent-ink);box-shadow:0 4px 14px rgba(74,42,92,.25)}
 #composeBtn:hover{opacity:.88}
 .badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;padding:0 3px;border-radius:99px;
   background:var(--danger);color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .usermenu{position:relative}
-.userbtn{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.16);border:none;
+.userbtn{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.45);border:none;
   border-radius:999px;padding:5px 14px 5px 6px;cursor:pointer;height:44px}
-.userbtn:hover{background:rgba(255,255,255,.28)}
-.uname{color:#fff;font-weight:700;font-size:14.5px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
-.avatar{border-radius:50%;object-fit:cover;background:rgba(255,255,255,.35);flex:none}
-.avatar.initial{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;background:rgba(255,255,255,.3)}
+.userbtn:hover{background:rgba(255,255,255,.7)}
+.uname{color:var(--accent-ink);font-weight:700;font-size:14.5px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.avatar{border-radius:50%;object-fit:cover;background:var(--card-hi);flex:none}
+.avatar.initial{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;background:var(--accent)}
 .dropdown,.notifpanel{position:absolute;top:52px;right:0;background:var(--bg0);color:var(--ink);
   border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:0 14px 34px rgba(0,0,0,.16);
   min-width:210px;overflow:hidden;z-index:60}
@@ -93,7 +96,7 @@ header.site{position:sticky;top:0;z-index:50;
 .notifpanel{min-width:280px;max-width:320px;max-height:360px;overflow-y:auto}
 .notif-item{padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line)}
 .notif-item:last-child{border-bottom:none}
-.notif-item.unread{background:rgba(156,142,208,.07)}
+.notif-item.unread{background:rgba(255,111,176,.07)}
 @media (max-width:600px){
   .uname{display:none}
   .userbtn{padding:5px}
@@ -119,14 +122,14 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
   font-size:13.5px;color:var(--muted2);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 
 /* ── ป้ายโหมดตัวอย่าง ─────────────────────────────────────── */
-.demo-banner{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;
+.demo-banner{background:var(--holo);color:var(--accent-ink);
   text-align:center;font-weight:700;font-size:14px;padding:10px 14px;line-height:1.5}
 
 /* ── ส่วนหัวหน้า / hero ───────────────────────────────────── */
 .hero{padding:64px 0 46px}
 .eyebrow{display:inline-block;font-size:13px;letter-spacing:.08em;text-transform:uppercase;
-  font-weight:700;color:var(--accent);background:rgba(156,142,208,.14);
-  border:1px solid rgba(156,142,208,.35);padding:6px 14px;border-radius:999px;margin-bottom:16px}
+  font-weight:700;color:var(--accent);background:rgba(255,111,176,.12);
+  border:1px solid rgba(255,111,176,.3);padding:6px 14px;border-radius:999px;margin-bottom:16px}
 .hero h1{font-size:clamp(30px,5vw,48px);margin-bottom:14px}
 .hero p.lead{font-size:18px;color:var(--muted);max-width:640px;margin-bottom:26px}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
@@ -144,7 +147,7 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 .card h3{font-size:19px;margin-bottom:8px}
 .card p{color:var(--muted);font-size:15px}
 .card .tag{display:inline-block;font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:999px;
-  background:rgba(156,142,208,.16);color:var(--accent);margin-bottom:12px}
+  background:rgba(255,111,176,.16);color:var(--accent);margin-bottom:12px}
 .card .meta{display:flex;gap:14px;margin-top:14px;font-size:13.5px;color:var(--muted2)}
 
 /* ── ฟอร์ม ────────────────────────────────────────────────── */
@@ -158,7 +161,7 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 .field textarea{min-height:120px;resize:vertical}
 .field input::placeholder,.field textarea::placeholder{color:var(--muted2)}
 .field input:focus,.field textarea:focus,.field select:focus{
-  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(156,142,208,.22)}
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,111,176,.22)}
 .field .help{font-size:13.5px;color:var(--muted2);margin-top:6px}
 .field.err input,.field.err textarea{border-color:var(--danger)}
 .msg{border-radius:var(--r);padding:14px 16px;font-size:14.5px;font-weight:600;margin-bottom:16px}
