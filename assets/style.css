@@ -102,10 +102,24 @@ header.site{position:sticky;top:0;z-index:50;
 .notif-item{padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line)}
 .notif-item:last-child{border-bottom:none}
 .notif-item.unread{background:rgba(255,111,176,.07)}
+.bottomnav{display:none}
 @media (max-width:600px){
   .uname{display:none}
   .userbtn{padding:5px}
   .searchbar input{padding:0 14px;font-size:13.5px}
+  /* จอมือถือ: ย้าย หน้าแรก/ข่าว/ถ้วยรางวัล/โปรไฟล์ ไปแถบล่างแทน ไม่ให้ไอคอนชนกันบน header แคบๆ */
+  .dupnav{display:none}
+  body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+  .bottomnav{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:55;
+    background:var(--bg0);border-top:1px solid var(--line);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    box-shadow:0 -2px 14px rgba(0,0,0,.1);
+  }
+  .bnitem{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;padding:5px 2px;border-radius:var(--r);color:var(--muted2);font-size:10.5px;font-weight:700}
+  .bnitem .bnicon{font-size:21px;line-height:1}
+  .bnitem.on{color:var(--accent)}
 }
 
 /* ── หน้าต่างโพสต์ด่วน (เปิดจากปุ่ม + บน header) ─────────────────────── */

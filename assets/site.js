@@ -61,9 +61,9 @@ function renderHeader(active){
   const leftHtml = user ? `<button class="navicon" id="composeBtn" type="button" title="โพสต์" aria-label="โพสต์">+</button>` : "";
 
   const rightHtml = user ? `
-      <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
-      <a class="navicon ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
-      <a class="navicon ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
+      <a class="navicon dupnav ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
+      <a class="navicon dupnav ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
+      <a class="navicon dupnav ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
       <button class="navicon" id="bellBtn" type="button" title="แจ้งเตือน" aria-label="แจ้งเตือน">
         🔔<span class="badge hidden" id="notifBadge">0</span>
       </button>
@@ -82,11 +82,23 @@ function renderHeader(active){
       </div>
       <div class="notifpanel hidden" id="notifPanel"><p class="muted" style="padding:14px;font-size:14px">กำลังโหลด…</p></div>
     ` : `
-      <a class="navicon ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
-      <a class="navicon ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
-      <a class="navicon ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
+      <a class="navicon dupnav ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
+      <a class="navicon dupnav ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
+      <a class="navicon dupnav ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
       <a href="login.html" style="display:inline-flex;align-items:center;min-height:40px;padding:0 18px;border-radius:999px;background:#fff;color:var(--accent-ink);font-weight:700;font-size:14.5px">เข้าสู่ระบบ</a>
     `;
+
+  /* แถบเมนูล่างแบบ IG — แสดงเฉพาะจอมือถือ (ดู CSS @media max-width:600px)
+     ไอคอนชุดเดียวกับ dupnav ด้านบนแต่ซ้ำไว้เป็นแถบล่าง เพื่อไม่ให้ไอคอนชนกันบน header แคบๆ */
+  const bottomNavHtml = `
+    <nav class="bottomnav">
+      <a class="bnitem ${on("index.html")}" href="index.html" aria-label="หน้าแรก"><span class="bnicon">🏠</span><span class="bnlabel">หน้าแรก</span></a>
+      <a class="bnitem ${on("news.html")}" href="news.html" aria-label="ข่าว"><span class="bnicon">📰</span><span class="bnlabel">ข่าว</span></a>
+      <a class="bnitem ${on("trophy.html")}" href="trophy.html" aria-label="ถ้วยรางวัล"><span class="bnicon">🏆</span><span class="bnlabel">ถ้วยรางวัล</span></a>
+      ${user
+        ? `<a class="bnitem ${on("account.html")}" href="account.html" aria-label="โปรไฟล์"><span class="bnicon">👤</span><span class="bnlabel">โปรไฟล์</span></a>`
+        : `<a class="bnitem ${on("login.html")}" href="login.html" aria-label="เข้าสู่ระบบ"><span class="bnicon">👤</span><span class="bnlabel">เข้าสู่ระบบ</span></a>`}
+    </nav>`;
 
   document.body.insertAdjacentHTML("afterbegin", `
     ${APP.demoMode ? '<div class="demo-banner">โหมดตัวอย่าง · ข้อมูลทั้งหมดในเว็บนี้เป็นข้อมูลจำลอง ยังไม่เชื่อมระบบจริง</div>' : ""}
@@ -129,6 +141,7 @@ function renderHeader(active){
         </form>
       </div>
     </div>` : ""}
+    ${bottomNavHtml}
   `);
 
   document.getElementById("headerSearchForm").onsubmit = (e) => {
