@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เนื้อหาการเรียนรู้ — ข้อสอบ</title>
+<meta name="description" content="อ่านเนื้อหาแยกตามสาระ พร้อมแบบทดสอบท้ายบทเพื่อเช็คความเข้าใจ">
+<link rel="canonical" href="https://wanchagaa-spec.github.io/exam/learn.html">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .strandblock{margin-bottom:34px}
+  .strandhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .strandhead h2{font-size:18px}
+  .strandhead .pct{font-size:13.5px;color:var(--muted2);font-weight:700}
+  .progressbar{height:8px;border-radius:99px;background:var(--card);overflow:hidden;margin-bottom:14px}
+  .progressbar i{display:block;height:100%;background:var(--holo)}
+  .lessonrow{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r-lg);padding:14px 18px;margin-bottom:10px}
+  .lessonrow:hover{background:var(--card-hi)}
+  .lessonrow .check{flex:none;font-size:20px;width:26px;text-align:center}
+  .lessonrow .title{flex:1;font-weight:700;font-size:15px}
+  .lessonrow .arrow{flex:none;color:var(--muted2)}
+</style>
+</head>
+<body>
+
+<main>
+  <section class="hero" style="padding-bottom:16px">
+    <div class="wrap">
+      <span class="eyebrow" id="eyebrow">เนื้อหาการเรียนรู้</span>
+      <h1 id="pageTitle">กำลังโหลด…</h1>
+      <p class="lead" id="pageDesc"></p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:10px">
+    <div class="wrap" style="max-width:720px;margin:0 auto">
+      <div id="strandList"><p class="muted">กำลังโหลด…</p></div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+(function(){
+  "use strict";
+  if (!requireLogin()) return;
+
+  renderHeader("learn.html");
+  renderFooter();
+
+  const user = getSession();
+  const params = new URLSearchParams(location.search);
+  const slug = params.get("subject") || "";
+  const subject = SUBJECTS.find(s => s.slug === slug);
+
+  if (!subject){
+    document.getElementById("pageTitle").textContent = "ไม่พบวิชานี้";
+    document.getElementById("strandList").innerHTML = '<p class="muted">กรุณาเลือกวิชาจากหน้ารายวิชาอีกครั้ง</p>';
+  } else {
+    document.title = "เรียนเนื้อหา: " + subject.name + " — ข้อสอบ";
+    document.getElementById("eyebrow").textContent = subject.icon + " " + subject.name;
+    document.getElementById("pageTitle").textContent = "เนื้อหาการเรียนรู้";
+    document.getElementById("pageDesc").textContent = "อ่านเนื้อหาแต่ละสาระ ทำแบบทดสอบท้ายบทให้ถูกครบทุกข้อ ระบบจะทำเครื่องหมาย “อ่านแล้ว” ให้อัตโนมัติ";
+    loadLessons();
+  }
+
+  async function loadLessons(){
+    const res = await apiCall("listLessons", { subject: subject.slug, email: user.email });
+    const box = document.getElementById("strandList");
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+
+    const strands = SUBJECT_STRANDS[subject.slug] || [];
+    const byStrand = {};
+    (res.lessons || []).forEach(l => { (byStrand[l.strand] = byStrand[l.strand] || []).push(l); });
+
+    const usedStrands = strands.filter(s => (byStrand[s] || []).length);
+    // เผื่อมีบทเรียนที่แท็กสาระไม่ตรงกับ SUBJECT_STRANDS ปัจจุบัน (เช่นแก้ชื่อสาระทีหลัง) ให้โชว์ท้ายสุดด้วย ไม่ตกหล่น
+    Object.keys(byStrand).forEach(s => { if (!usedStrands.includes(s)) usedStrands.push(s); });
+
+    if (!usedStrands.length){
+      box.innerHTML = '<p class="muted">ยังไม่มีเนื้อหาสำหรับวิชานี้ กลับมาดูใหม่ภายหลังนะ</p>';
+      return;
+    }
+
+    box.innerHTML = usedStrands.map(strand => {
+      const lessons = byStrand[strand];
+      const doneCount = lessons.filter(l => l.completed).length;
+      const pct = Math.round(doneCount / lessons.length * 100);
+      return `
+        <div class="strandblock">
+          <div class="strandhead">
+            <h2>${escHtml(strand)}</h2>
+            <span class="pct">อ่านแล้ว ${doneCount}/${lessons.length}</span>
+          </div>
+          <div class="progressbar"><i style="width:${pct}%"></i></div>
+          ${lessons.map(l => `
+            <a class="lessonrow" href="lesson.html?id=${encodeURIComponent(l.id)}&subject=${encodeURIComponent(subject.slug)}">
+              <span class="check">${l.completed ? "✅" : "⬜"}</span>
+              <span class="title">${escHtml(l.title)}</span>
+              <span class="arrow">›</span>
+            </a>`).join("")}
+        </div>`;
+    }).join("");
+  }
+})();
+</script>
+</body>
+</html>

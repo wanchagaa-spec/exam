@@ -46,6 +46,12 @@
  *               note    : คำอธิบายเฉลย (ไม่บังคับ) พิมพ์สมการคณิตศาสตร์แบบ LaTeX ได้ เช่น $x^2+1$
  *               strand  : สาระ/หมวดเนื้อหาของข้อนี้ ต้องตรงกับชื่อใน SUBJECT_STRANDS (assets/demo-data.js) เป๊ะ ๆ
  *                         ใช้ตอนสุ่มข้อสอบแยกตามโครงสร้างชุดข้อสอบ (Blueprint)
+ *   Lessons    : id | subject | strand | order | title | content | visible | updatedAt
+ *               ── เนื้อหาการเรียนรู้ (แยกจากข้อสอบ) จัดการผ่าน admin-lessons.html
+ *   LessonQuiz : id | lessonId | type | text | options | answer | note
+ *               ── แบบทดสอบท้ายบทเรียน แยกเอกเทศจากคลังข้อสอบหลัก Q_<slug> ไม่จับเวลา ไม่บันทึกลง Results
+ *   LessonProgress : email | lessonId | completedAt
+ *               ── มีแถว = ตอบแบบทดสอบท้ายบทนั้นถูกครบทุกข้อแล้ว (เงื่อนไข "อ่านแล้ว")
  *
  * รูปภาพประกอบโจทย์: อัปโหลดผ่านหน้า admin.html (แท็บ "นำเข้าข้อมูล (JSON)") ระบบเก็บไฟล์ไว้ใน
  *   โฟลเดอร์ Google Drive ชื่อ "ข้อสอบ - รูปประกอบโจทย์" (สร้างให้อัตโนมัติ วางไว้ข้าง ๆ ไฟล์ชีตนี้)
@@ -98,7 +104,8 @@ function doGet(e) {
 const READ_ONLY_ACTIONS = new Set([
   'login', 'blueprint', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
   'trophyLeaderboard', 'trophyAllTime', 'trophyHallOfFame',
-  'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs'
+  'listLessons', 'getLesson',
+  'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs', 'adminListLessons', 'adminListLessonQuiz'
 ]);
 
 /* ══════════════════════════ doPost ══════════════════════════ */
@@ -154,6 +161,16 @@ function routeAction_(body) {
     case 'adminSaveBlueprintConfig':   return adminSaveBlueprintConfig(body);
     case 'adminDeleteBlueprintConfig': return adminDeleteBlueprintConfig(body);
     case 'adminSetActiveBlueprintConfig': return adminSetActiveBlueprintConfig(body);
+    case 'listLessons':          return listLessons(body);
+    case 'getLesson':            return getLesson(body);
+    case 'submitLessonQuiz':     return submitLessonQuiz(body);
+    case 'adminListLessons':     return adminListLessons(body);
+    case 'adminSaveLesson':      return adminSaveLesson(body);
+    case 'adminDeleteLesson':    return adminDeleteLesson(body);
+    case 'adminReorderLessons':  return adminReorderLessons(body);
+    case 'adminListLessonQuiz':  return adminListLessonQuiz(body);
+    case 'adminSaveLessonQuizItem':   return adminSaveLessonQuizItem(body);
+    case 'adminDeleteLessonQuizItem': return adminDeleteLessonQuizItem(body);
     default:                     return { ok: false, error: 'unknown action' };
   }
 }
@@ -860,6 +877,226 @@ function trophyHallOfFame(body) {
   return { ok: true, months };
 }
 
+/* ══════════════════════════ เนื้อหาบทเรียน (Lessons) ══════════════════════════
+   Lessons        : id | subject | strand | order | title | content | visible | updatedAt
+                    ── content เป็นข้อความ + markdown เบา ๆ แบบเดียวกับโจทย์ข้อสอบ (![รูปประกอบ](url) แทรกรูป, $...$ สูตร)
+                       visible=false = แอดมินร่างไว้ก่อน ยังไม่เปิดให้นักเรียนเห็น (เหมือน SUBJECTS.visible)
+   LessonQuiz     : id | lessonId | type | text | options | answer | note
+                    ── แบบทดสอบท้ายบท แยกเอกเทศจากคลังข้อสอบหลัก Q_<subject> ไม่ปนกัน ไม่จับเวลา ไม่บันทึกลง Results
+   LessonProgress : email | lessonId | completedAt
+                    ── มีแถว = ตอบแบบทดสอบท้ายบทนั้นถูกครบทุกข้อแล้วอย่างน้อย 1 ครั้ง (เงื่อนไข "อ่านแล้ว") */
+function lessonsSheet_()        { return sheet_('Lessons', ['id', 'subject', 'strand', 'order', 'title', 'content', 'visible', 'updatedAt']); }
+function lessonQuizSheet_()     { return sheet_('LessonQuiz', ['id', 'lessonId', 'type', 'text', 'options', 'answer', 'note']); }
+function lessonProgressSheet_() { return sheet_('LessonProgress', ['email', 'lessonId', 'completedAt']); }
+
+function lessonRowToObj_(r) {
+  return {
+    id: String(r[0]), subject: String(r[1]), strand: String(r[2]), order: Number(r[3]) || 0,
+    title: String(r[4] || ''), content: String(r[5] || ''),
+    visible: r[6] !== false && r[6] !== 'FALSE'
+  };
+}
+
+function allLessons_(subject) {
+  return lessonsSheet_().getDataRange().getValues().slice(1)
+    .filter(r => String(r[1]) === subject)
+    .map(lessonRowToObj_);
+}
+
+function completedLessonIds_(email) {
+  if (!email) return new Set();
+  return new Set(
+    lessonProgressSheet_().getDataRange().getValues().slice(1)
+      .filter(r => String(r[0]).toLowerCase() === email)
+      .map(r => String(r[1]))
+  );
+}
+
+/** รายการบทเรียนของวิชา (เฉพาะที่เปิดให้เห็น) พร้อมสถานะอ่านผ่านแล้วหรือยัง — หน้า learn.html ใช้จัดกลุ่มตามสาระเอง */
+function listLessons(body) {
+  const subject = String(body.subject || '').slice(0, 50);
+  const email = String(body.email || '').trim().toLowerCase();
+  const done = completedLessonIds_(email);
+  const lessons = allLessons_(subject).filter(l => l.visible)
+    .sort((a, b) => a.order - b.order)
+    .map(l => ({ id: l.id, strand: l.strand, order: l.order, title: l.title, completed: done.has(l.id) }));
+  return { ok: true, lessons };
+}
+
+/** เนื้อหาบทเดียว + แบบทดสอบท้ายบท (ไม่ส่งเฉลยไปด้วย เหมือน serveExam) — ต้องล็อกอินก่อนถึงจะเรียกหน้านี้ได้ (เช็คฝั่งเว็บ) */
+function getLesson(body) {
+  const id = String(body.id || '').trim();
+  const email = String(body.email || '').trim().toLowerCase();
+
+  const rows = lessonsSheet_().getDataRange().getValues();
+  let row = null;
+  for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === id) { row = rows[i]; break; } }
+  if (!row) return { ok: false, error: 'ไม่พบเนื้อหานี้' };
+
+  const lesson = lessonRowToObj_(row);
+  if (!lesson.visible) return { ok: false, error: 'เนื้อหานี้ยังไม่เปิดให้เข้าดู' };
+
+  const quiz = lessonQuizSheet_().getDataRange().getValues().slice(1)
+    .filter(r => String(r[1]) === id)
+    .map(r => ({ id: String(r[0]), type: String(r[2]), text: String(r[3] || ''),
+                 options: String(r[4] || '').split('|').filter(Boolean) }));
+
+  return {
+    ok: true,
+    lesson: { id: lesson.id, subject: lesson.subject, strand: lesson.strand, title: lesson.title, content: lesson.content },
+    quiz,
+    completed: completedLessonIds_(email).has(id)
+  };
+}
+
+/** ตรวจแบบทดสอบท้ายบท — ตอบถูกครบทุกข้อในรอบเดียวถึงจะนับว่า "อ่านแล้ว" (บันทึกลง LessonProgress) ทำซ้ำได้ไม่จำกัดจนกว่าจะผ่าน */
+function submitLessonQuiz(body) {
+  const lessonId = String(body.lessonId || '').trim();
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!email) return { ok: false, error: 'กรุณาเข้าสู่ระบบก่อน' };
+
+  const quizRows = lessonQuizSheet_().getDataRange().getValues().slice(1).filter(r => String(r[1]) === lessonId);
+  if (!quizRows.length) return { ok: false, error: 'บทนี้ยังไม่มีแบบทดสอบท้ายบท' };
+
+  const ansIn = body.answers || {};
+  let allCorrect = true;
+  const detail = {};
+  quizRows.forEach(r => {
+    const qid = String(r[0]);
+    const correct = isCorrect_(String(r[2]), ansIn[qid], String(r[5] || ''));
+    if (!correct) allCorrect = false;
+    detail[qid] = { correct, answer: String(r[5] || ''), note: String(r[6] || '') };
+  });
+
+  if (allCorrect) {
+    const sh = lessonProgressSheet_();
+    const exists = sh.getDataRange().getValues().slice(1)
+      .some(r => String(r[0]).toLowerCase() === email && String(r[1]) === lessonId);
+    if (!exists) sh.appendRow([email, lessonId, new Date()]);
+  }
+
+  return { ok: true, allCorrect, detail };
+}
+
+/* ── แอดมิน: จัดการเนื้อหาบทเรียน + แบบทดสอบท้ายบท ── */
+function adminListLessons(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const quizCounts = {};
+  lessonQuizSheet_().getDataRange().getValues().slice(1).forEach(r => {
+    const lid = String(r[1]); quizCounts[lid] = (quizCounts[lid] || 0) + 1;
+  });
+  const lessons = allLessons_(subject).sort((a, b) => a.order - b.order)
+    .map(l => Object.assign({ quizCount: quizCounts[l.id] || 0 }, l));
+  return { ok: true, lessons };
+}
+
+function adminSaveLesson(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const subject = String(body.subject || '').slice(0, 50);
+  const strand  = clean(body.strand);
+  const title   = clean(body.title);
+  const content = cleanLong_(body.content, 20000);
+  const visible = body.visible !== false;
+  if (!subject || !strand || !title || !content) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+
+  const sh = lessonsSheet_();
+  const rows = sh.getDataRange().getValues();
+  const id = body.id && String(body.id).trim() ? String(body.id).trim() : 'lsn_' + Utilities.getUuid().slice(0, 8);
+
+  let rowIndex = -1, order = null;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === id) { rowIndex = i + 1; order = Number(rows[i][3]) || 0; break; }
+  }
+  if (order === null) {
+    // บทเรียนใหม่ — ต่อท้ายลำดับของสาระนั้น
+    order = rows.slice(1).filter(r => String(r[1]) === subject && String(r[2]) === strand)
+      .reduce((m, r) => Math.max(m, Number(r[3]) || 0), -1) + 1;
+  }
+
+  const rowData = [id, subject, strand, order, title, content, visible, new Date()];
+  if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  else sh.appendRow(rowData);
+
+  return { ok: true, id };
+}
+
+function adminDeleteLesson(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const id = String(body.id || '').trim();
+
+  const sh = lessonsSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === id) { sh.deleteRow(i + 1); break; } }
+
+  // เคลียร์แบบทดสอบ + ประวัติอ่านแล้วของบทนี้ทิ้งไปด้วย กันข้อมูลค้าง (orphan) ในชีตอื่น
+  const qsh = lessonQuizSheet_();
+  const qrows = qsh.getDataRange().getValues();
+  for (let i = qrows.length - 1; i >= 1; i--) { if (String(qrows[i][1]) === id) qsh.deleteRow(i + 1); }
+
+  const psh = lessonProgressSheet_();
+  const prows = psh.getDataRange().getValues();
+  for (let i = prows.length - 1; i >= 1; i--) { if (String(prows[i][1]) === id) psh.deleteRow(i + 1); }
+
+  return { ok: true };
+}
+
+/** จัดลำดับบทเรียนใหม่ในสาระเดียวกัน — ฝั่งเว็บส่งรายการ id เรียงลำดับที่ต้องการทั้งหมดของสาระนั้นมา */
+function adminReorderLessons(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const orderedIds = Array.isArray(body.orderedIds) ? body.orderedIds.map(String) : [];
+  const sh = lessonsSheet_();
+  const rows = sh.getDataRange().getValues();
+  orderedIds.forEach((id, idx) => {
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === id) { sh.getRange(i + 1, 4).setValue(idx); break; }
+    }
+  });
+  return { ok: true };
+}
+
+function adminListLessonQuiz(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const lessonId = String(body.lessonId || '').trim();
+  const quiz = lessonQuizSheet_().getDataRange().getValues().slice(1)
+    .filter(r => String(r[1]) === lessonId)
+    .map(r => ({ id: String(r[0]), lessonId: String(r[1]), type: String(r[2]), text: String(r[3] || ''),
+                 options: String(r[4] || '').split('|').filter(Boolean), answer: String(r[5] || ''), note: String(r[6] || '') }));
+  return { ok: true, quiz };
+}
+
+function adminSaveLessonQuizItem(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const lessonId = String(body.lessonId || '').trim();
+  const type = (body.type === 'tf' || body.type === 'fill') ? body.type : 'mc';
+  const text = clean(body.text);
+  const options = type === 'mc' ? (Array.isArray(body.options) ? body.options.map(clean).filter(Boolean) : []) : [];
+  const answer = clean(body.answer);
+  const note = clean(body.note);
+  if (!lessonId || !text || !answer) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+  if (type === 'mc' && options.length < 2) return { ok: false, error: 'ต้องมีตัวเลือกอย่างน้อย 2 ข้อ' };
+
+  const sh = lessonQuizSheet_();
+  const id = body.id && String(body.id).trim() ? String(body.id).trim() : 'lq_' + Utilities.getUuid().slice(0, 8);
+  const rows = sh.getDataRange().getValues();
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === id) { rowIndex = i + 1; break; } }
+
+  const rowData = [id, lessonId, type, text, options.join('|'), answer, note];
+  if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  else sh.appendRow(rowData);
+
+  return { ok: true, id };
+}
+
+function adminDeleteLessonQuizItem(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  const sh = lessonQuizSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === String(body.id)) { sh.deleteRow(i + 1); break; } }
+  return { ok: true };
+}
+
 /* ══════════════════════════ แอดมิน: จัดการคลังข้อสอบ ══════════════════════════ */
 /**
  * ⚠ ระบบตรวจ ADMIN_PASSWORD ใหม่ทุกคำขอ (ไม่มีการออก session token)
@@ -996,6 +1233,14 @@ function isCorrect_(type, given, answerStored) {
 function clean(v) {
   if (v === undefined || v === null) return '';
   let s = String(v).slice(0, 1000);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return s;
+}
+
+/** เหมือน clean() แต่ไม่จำกัดความยาวแค่ 1000 ตัวอักษร ใช้กับเนื้อหาบทเรียนที่ยาวกว่าโจทย์ข้อสอบทั่วไป */
+function cleanLong_(v, maxLen) {
+  if (v === undefined || v === null) return '';
+  let s = String(v).slice(0, maxLen || 20000);
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return s;
 }

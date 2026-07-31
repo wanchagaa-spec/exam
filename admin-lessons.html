@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เนื้อหาบทเรียน — หน้าแอดมิน</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:20px}
+  .toolbar .field{margin-bottom:0;min-width:220px}
+  .imgAttachBox{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
+  .imgAttachBox img{max-width:140px;max-height:100px;border-radius:var(--r);display:block}
+  .optrow{display:flex;gap:10px;align-items:center;margin-bottom:9px}
+  .optrow .optn{flex:none;width:26px;font-weight:700;color:var(--muted2)}
+  .optrow input{flex:1}
+  .strandgrouphead{font-weight:700;color:var(--muted);margin:18px 0 8px;font-size:14.5px}
+  .strandgrouphead:first-child{margin-top:0}
+  .lessonitem{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+  .lessonitem .ord{display:flex;flex-direction:column;gap:2px;flex:none}
+  .lessonitem .ord button{background:none;border:1px solid var(--line);border-radius:6px;width:24px;height:22px;
+    cursor:pointer;font-size:11px;line-height:1}
+  .lessonitem .ord button:disabled{opacity:.3;cursor:not-allowed}
+  .lessonitem .info{flex:1;min-width:160px}
+  .lessonitem .info .t{font-weight:700;font-size:15px}
+  .lessonitem .info .m{font-size:12.5px;color:var(--muted2);margin-top:2px}
+  .lessonitem .btns{display:flex;gap:6px;flex-wrap:wrap}
+  .quizitem{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;margin-bottom:8px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .quizitem .qtxt{flex:1;min-width:180px;font-size:14.5px}
+  .quizitem .qtag{font-size:11.5px;font-weight:700;color:var(--accent);background:rgba(255,111,176,.12);
+    padding:2px 8px;border-radius:99px;margin-right:8px}
+</style>
+</head>
+<body>
+
+<main>
+  <section class="section" style="padding-top:56px">
+    <div class="wrap">
+      <div id="panel" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;flex-wrap:wrap;gap:10px">
+          <div>
+            <span class="eyebrow">หน้าแอดมิน</span>
+            <h1 style="margin-top:8px">เนื้อหาบทเรียน</h1>
+          </div>
+          <button class="btn s" id="logoutBtn">ออกจากระบบแอดมิน</button>
+        </div>
+
+        <div id="adminNavBox"></div>
+
+        <div class="toolbar">
+          <div class="field">
+            <label for="subjectSel">เลือกวิชา</label>
+            <select id="subjectSel"></select>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:26px">
+          <h2 id="lessonFormTitle" style="margin-bottom:16px">เพิ่มบทเรียนใหม่</h2>
+          <div id="lessonMsg"></div>
+          <form id="lessonForm">
+            <input type="hidden" id="lessonIdField">
+            <div class="field">
+              <label for="lessonStrandSel">สาระ/หมวดเนื้อหา</label>
+              <select id="lessonStrandSel" required></select>
+            </div>
+            <div class="field">
+              <label for="lessonTitleInput">ชื่อบทเรียน <span class="req">*</span></label>
+              <input type="text" id="lessonTitleInput" required placeholder="เช่น เลขยกกำลังและกรณฑ์">
+            </div>
+            <div class="field">
+              <label for="lessonContentInput">เนื้อหา <span class="req">*</span></label>
+              <textarea id="lessonContentInput" rows="10" required
+                placeholder="พิมพ์เนื้อหาตรงนี้ — ใส่สมการแบบ LaTeX คร่อมด้วย $...$ ได้ ใส่รูปด้วยปุ่มแนบรูปด้านล่าง"></textarea>
+            </div>
+            <div class="imgAttachBox">
+              <div style="flex:1;min-width:200px">
+                <div class="muted" style="font-size:13.5px;margin-bottom:8px">แนบรูปประกอบเนื้อหา (ถ้ามี) — อัปโหลดแล้วระบบจะแทรกลงท้ายเนื้อหาให้อัตโนมัติ</div>
+                <div id="imgUploadMsg"></div>
+                <input type="file" id="imgUploadInput" accept="image/*" class="hidden">
+                <button class="btn s" id="imgUploadBtn" type="button">📷 เลือกรูป…</button>
+              </div>
+              <img id="imgUploadPreview" class="hidden" alt="">
+            </div>
+            <div class="field">
+              <label><input type="checkbox" id="lessonVisibleInput" checked> เปิดให้นักเรียนเห็น (ยกเลิกติ๊ก = ร่างไว้ก่อน)</label>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn p" type="submit" id="lessonSaveBtn">เพิ่มบทเรียน</button>
+              <button class="btn s hidden" type="button" id="lessonCancelBtn">ยกเลิกแก้ไข</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-bottom:26px">
+          <h2 style="margin-bottom:16px">รายการบทเรียน</h2>
+          <div id="lessonList"><p class="muted">กำลังโหลด…</p></div>
+        </div>
+
+        <div class="card hidden" id="quizPanel">
+          <h2 id="quizPanelTitle" style="margin-bottom:6px">แบบทดสอบท้ายบท</h2>
+          <p class="muted" style="font-size:13.5px;margin-bottom:16px">ต้องมีอย่างน้อย 1 ข้อ นักเรียนต้องตอบถูกครบทุกข้อในรอบเดียวถึงจะนับว่า “อ่านแล้ว”</p>
+          <div id="quizList"></div>
+          <hr style="margin:18px 0;border:none;border-top:1px solid var(--line)">
+          <div id="quizItemMsg"></div>
+          <form id="quizItemForm">
+            <input type="hidden" id="quizItemIdField">
+            <div class="field">
+              <label for="quizTypeSel">ประเภทข้อ</label>
+              <select id="quizTypeSel">
+                <option value="mc">ปรนัย (เลือกตอบ)</option>
+                <option value="tf">ถูก/ผิด</option>
+                <option value="fill">เติมคำตอบ</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="quizTextInput">โจทย์ <span class="req">*</span></label>
+              <textarea id="quizTextInput" rows="3" required></textarea>
+            </div>
+            <div class="field" id="quizOptionsField">
+              <label>ตัวเลือก (ปรนัย)</label>
+              <div id="quizOptionsWrap"></div>
+              <button class="btn s" id="quizAddOptionBtn" type="button" style="margin-top:4px">+ เพิ่มตัวเลือก</button>
+            </div>
+            <div class="field" id="quizAnswerFieldMc">
+              <label for="quizAnswerSelectMc">เฉลย</label>
+              <select id="quizAnswerSelectMc"></select>
+            </div>
+            <div class="field hidden" id="quizAnswerFieldTf">
+              <label for="quizAnswerSelectTf">เฉลย</label>
+              <select id="quizAnswerSelectTf">
+                <option value="ถูก">ถูก</option>
+                <option value="ผิด">ผิด</option>
+              </select>
+            </div>
+            <div class="field hidden" id="quizAnswerFieldFill">
+              <label for="quizAnswerInputFill">เฉลย</label>
+              <input type="text" id="quizAnswerInputFill" placeholder="ใส่คำตอบที่ยอมรับได้หลายแบบ คั่นด้วย | เช่น 10|๑๐|สิบ">
+            </div>
+            <div class="field">
+              <label for="quizNoteInput">คำอธิบายเฉลย (แสดงเมื่อนักเรียนตอบผิดข้อนี้)</label>
+              <textarea id="quizNoteInput" rows="2"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn p" type="submit" id="quizSaveBtn">เพิ่มข้อ</button>
+              <button class="btn s hidden" type="button" id="quizCancelBtn">ยกเลิกแก้ไข</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+(function(){
+  "use strict";
+  const LET = ["ก","ข","ค","ง","จ","ฉ"];
+  let currentSubject = "";
+  let editingLessonId = null;
+  let currentQuizLessonId = null;
+  let editingQuizItemId = null;
+  let lessonsCache = [];
+
+  renderHeader("admin.html");
+  renderFooter();
+
+  document.getElementById("logoutBtn").onclick = () => { clearAdminPass(); location.href = "admin.html"; };
+
+  requireAdminSession(initPanel);
+
+  function initPanel(){
+    document.getElementById("panel").classList.remove("hidden");
+    document.getElementById("adminNavBox").innerHTML = adminNavHtml("lessons");
+
+    const sel = document.getElementById("subjectSel");
+    sel.innerHTML = SUBJECTS.map(s => `<option value="${s.slug}">${s.icon} ${escHtml(s.name)}</option>`).join("");
+    const params = new URLSearchParams(location.search);
+    if (params.get("subject") && SUBJECTS.some(s => s.slug === params.get("subject"))) sel.value = params.get("subject");
+    currentSubject = sel.value;
+    adminNavSyncSubject(currentSubject);
+    sel.onchange = () => {
+      currentSubject = sel.value;
+      adminNavSyncSubject(currentSubject);
+      resetLessonForm();
+      hideQuizPanel();
+      refreshStrandSelect();
+      loadLessonList();
+    };
+
+    refreshStrandSelect();
+    loadLessonList();
+
+    document.getElementById("imgUploadBtn").onclick = () => document.getElementById("imgUploadInput").click();
+    document.getElementById("imgUploadInput").onchange = onImageUpload;
+    document.getElementById("lessonForm").onsubmit = onLessonSubmit;
+    document.getElementById("lessonCancelBtn").onclick = resetLessonForm;
+
+    document.getElementById("quizTypeSel").onchange = onQuizTypeChange;
+    document.getElementById("quizAddOptionBtn").onclick = () => { addOptionRow(); refreshAnswerOptions(); };
+    document.getElementById("quizItemForm").onsubmit = onQuizItemSubmit;
+    document.getElementById("quizCancelBtn").onclick = resetQuizItemForm;
+  }
+
+  function refreshStrandSelect(){
+    const strands = SUBJECT_STRANDS[currentSubject] || [];
+    document.getElementById("lessonStrandSel").innerHTML = strands.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("");
+  }
+
+  /* ── ฟอร์มเพิ่ม/แก้ไขบทเรียน ── */
+  function resetLessonForm(){
+    editingLessonId = null;
+    document.getElementById("lessonFormTitle").textContent = "เพิ่มบทเรียนใหม่";
+    document.getElementById("lessonIdField").value = "";
+    document.getElementById("lessonTitleInput").value = "";
+    document.getElementById("lessonContentInput").value = "";
+    document.getElementById("lessonVisibleInput").checked = true;
+    document.getElementById("lessonSaveBtn").textContent = "เพิ่มบทเรียน";
+    document.getElementById("lessonCancelBtn").classList.add("hidden");
+    document.getElementById("lessonMsg").innerHTML = "";
+    document.getElementById("imgUploadMsg").innerHTML = "";
+    document.getElementById("imgUploadPreview").classList.add("hidden");
+    refreshStrandSelect();
+  }
+
+  function editLesson(lesson){
+    editingLessonId = lesson.id;
+    document.getElementById("lessonFormTitle").textContent = "แก้ไขบทเรียน";
+    document.getElementById("lessonIdField").value = lesson.id;
+    document.getElementById("lessonTitleInput").value = lesson.title;
+    document.getElementById("lessonContentInput").value = lesson.content || "";
+    document.getElementById("lessonVisibleInput").checked = lesson.visible !== false;
+    document.getElementById("lessonSaveBtn").textContent = "บันทึกการแก้ไข";
+    document.getElementById("lessonCancelBtn").classList.remove("hidden");
+    refreshStrandSelect();
+    document.getElementById("lessonStrandSel").value = lesson.strand;
+    document.getElementById("lessonForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function onImageUpload(e){
+    const file = e.target.files[0];
+    if (!file) return;
+    const msg = document.getElementById("imgUploadMsg");
+    msg.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังอัปโหลด…</p>';
+    try {
+      const dataUrl = await resizeImageToDataUrlFit(file, 1000);
+      const res = await apiCall("uploadQuestionImage", { adminPassword: adminPass(), dataUrl, filename: file.name });
+      if (res.ok){
+        const textEl = document.getElementById("lessonContentInput");
+        textEl.value = textEl.value.trimEnd() + `\n\n![รูปประกอบ](${res.url})`;
+        const preview = document.getElementById("imgUploadPreview");
+        preview.src = res.url;
+        preview.classList.remove("hidden");
+        msg.innerHTML = '<div class="msg ok">แนบรูปเข้าท้ายเนื้อหาแล้ว</div>';
+      } else {
+        msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "อัปโหลดไม่สำเร็จ")}</div>`;
+      }
+    } catch (err) {
+      msg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
+    }
+    e.target.value = "";
+  }
+
+  async function onLessonSubmit(e){
+    e.preventDefault();
+    const msg = document.getElementById("lessonMsg");
+    const strand = document.getElementById("lessonStrandSel").value;
+    const title = document.getElementById("lessonTitleInput").value.trim();
+    const content = document.getElementById("lessonContentInput").value.trim();
+    const visible = document.getElementById("lessonVisibleInput").checked;
+    if (!strand || !title || !content){ msg.innerHTML = '<div class="msg bad">กรุณากรอกข้อมูลให้ครบ</div>'; return; }
+
+    const btn = document.getElementById("lessonSaveBtn");
+    btn.disabled = true;
+    const payload = { adminPassword: adminPass(), subject: currentSubject, strand, title, content, visible };
+    if (editingLessonId) payload.id = editingLessonId;
+    const res = await apiCall("adminSaveLesson", payload);
+    btn.disabled = false;
+
+    if (!res.ok){ msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "บันทึกไม่สำเร็จ")}</div>`; return; }
+
+    const wasNew = !editingLessonId;
+    msg.innerHTML = '<div class="msg ok">บันทึกแล้ว</div>';
+    resetLessonForm();
+    await loadLessonList();
+    if (wasNew){
+      const created = lessonsCache.find(l => l.id === res.id);
+      if (created) openQuizPanel(created);
+    }
+  }
+
+  /* ── รายการบทเรียน (จัดกลุ่มตามสาระ) ── */
+  async function loadLessonList(){
+    const box = document.getElementById("lessonList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("adminListLessons", { adminPassword: adminPass(), subject: currentSubject });
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+
+    lessonsCache = res.lessons || [];
+    if (!lessonsCache.length){ box.innerHTML = '<p class="muted">ยังไม่มีบทเรียนในวิชานี้ เพิ่มบทเรียนแรกได้จากฟอร์มด้านบน</p>'; return; }
+
+    const strandsOrder = SUBJECT_STRANDS[currentSubject] || [];
+    const byStrand = {};
+    lessonsCache.forEach(l => { (byStrand[l.strand] = byStrand[l.strand] || []).push(l); });
+    const usedStrands = strandsOrder.filter(s => byStrand[s]);
+    Object.keys(byStrand).forEach(s => { if (!usedStrands.includes(s)) usedStrands.push(s); });
+
+    box.innerHTML = usedStrands.map(strand => {
+      const list = byStrand[strand];
+      return `<div class="strandgrouphead">${escHtml(strand)}</div>` +
+        list.map((l, i) => `
+          <div class="lessonitem" data-id="${escHtml(l.id)}">
+            <div class="ord">
+              <button type="button" class="upBtn" ${i === 0 ? "disabled" : ""}>▲</button>
+              <button type="button" class="downBtn" ${i === list.length - 1 ? "disabled" : ""}>▼</button>
+            </div>
+            <div class="info">
+              <div class="t">${l.visible === false ? "🙈 " : ""}${escHtml(l.title)}</div>
+              <div class="m">แบบทดสอบ ${l.quizCount} ข้อ${l.visible === false ? " · ร่างไว้ ยังไม่เปิดให้เห็น" : ""}</div>
+            </div>
+            <div class="btns">
+              <button class="btn s editBtn" type="button">แก้ไข</button>
+              <button class="btn s quizBtn" type="button">แบบทดสอบ (${l.quizCount})</button>
+              <button class="btn s delbtn delBtn" type="button">ลบ</button>
+            </div>
+          </div>`).join("");
+    }).join("");
+
+    box.querySelectorAll(".lessonitem").forEach(row => {
+      const id = row.getAttribute("data-id");
+      const lesson = lessonsCache.find(l => l.id === id);
+      row.querySelector(".editBtn").onclick = () => editLesson(lesson);
+      row.querySelector(".quizBtn").onclick = () => openQuizPanel(lesson);
+      row.querySelector(".delBtn").onclick = () => deleteLesson(lesson);
+      const upBtn = row.querySelector(".upBtn"), downBtn = row.querySelector(".downBtn");
+      if (upBtn) upBtn.onclick = () => moveLesson(lesson, -1);
+      if (downBtn) downBtn.onclick = () => moveLesson(lesson, 1);
+    });
+  }
+
+  async function moveLesson(lesson, dir){
+    const siblings = lessonsCache.filter(l => l.strand === lesson.strand).sort((a, b) => a.order - b.order);
+    const idx = siblings.findIndex(l => l.id === lesson.id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= siblings.length) return;
+    [siblings[idx], siblings[swapIdx]] = [siblings[swapIdx], siblings[idx]];
+    await apiCall("adminReorderLessons", { adminPassword: adminPass(), subject: currentSubject, orderedIds: siblings.map(l => l.id) });
+    loadLessonList();
+  }
+
+  async function deleteLesson(lesson){
+    if (!confirm(`ลบบทเรียน "${lesson.title}" พร้อมแบบทดสอบท้ายบท? ย้อนกลับไม่ได้`)) return;
+    await apiCall("adminDeleteLesson", { adminPassword: adminPass(), id: lesson.id });
+    if (currentQuizLessonId === lesson.id) hideQuizPanel();
+    if (editingLessonId === lesson.id) resetLessonForm();
+    loadLessonList();
+  }
+
+  /* ── แบบทดสอบท้ายบท ── */
+  function hideQuizPanel(){
+    currentQuizLessonId = null;
+    document.getElementById("quizPanel").classList.add("hidden");
+  }
+
+  function openQuizPanel(lesson){
+    currentQuizLessonId = lesson.id;
+    document.getElementById("quizPanel").classList.remove("hidden");
+    document.getElementById("quizPanelTitle").textContent = "แบบทดสอบท้ายบท: " + lesson.title;
+    resetQuizItemForm();
+    loadQuizList();
+    document.getElementById("quizPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function loadQuizList(){
+    const box = document.getElementById("quizList");
+    box.innerHTML = '<p class="muted">กำลังโหลด…</p>';
+    const res = await apiCall("adminListLessonQuiz", { adminPassword: adminPass(), lessonId: currentQuizLessonId });
+    if (!res.ok){ box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`; return; }
+    const items = res.quiz || [];
+    const typeLabel = { mc: "ปรนัย", tf: "ถูก/ผิด", fill: "เติมคำตอบ" };
+    box.innerHTML = items.length ? items.map(q => `
+      <div class="quizitem" data-id="${escHtml(q.id)}">
+        <div class="qtxt"><span class="qtag">${typeLabel[q.type] || q.type}</span>${escHtml(q.text)}</div>
+        <div class="btns">
+          <button class="btn s editQuizBtn" type="button">แก้ไข</button>
+          <button class="btn s delbtn delQuizBtn" type="button">ลบ</button>
+        </div>
+      </div>`).join("") : '<p class="muted">ยังไม่มีข้อในแบบทดสอบท้ายบทนี้</p>';
+
+    box.querySelectorAll(".quizitem").forEach(row => {
+      const id = row.getAttribute("data-id");
+      const item = items.find(q => q.id === id);
+      row.querySelector(".editQuizBtn").onclick = () => editQuizItem(item);
+      row.querySelector(".delQuizBtn").onclick = () => deleteQuizItem(item);
+    });
+
+    // อัปเดตจำนวนข้อในการ์ดรายการบทเรียนด้านบนให้ตรงกันโดยไม่ต้องโหลดใหม่ทั้งหน้า
+    const lesson = lessonsCache.find(l => l.id === currentQuizLessonId);
+    if (lesson) lesson.quizCount = items.length;
+    const row = document.querySelector(`.lessonitem[data-id="${CSS.escape(currentQuizLessonId)}"] .quizBtn`);
+    if (row) row.textContent = `แบบทดสอบ (${items.length})`;
+    const mRow = document.querySelector(`.lessonitem[data-id="${CSS.escape(currentQuizLessonId)}"] .m`);
+    if (mRow && lesson) mRow.textContent = `แบบทดสอบ ${items.length} ข้อ${lesson.visible === false ? " · ร่างไว้ ยังไม่เปิดให้เห็น" : ""}`;
+  }
+
+  function resetQuizItemForm(){
+    editingQuizItemId = null;
+    document.getElementById("quizItemIdField").value = "";
+    document.getElementById("quizTextInput").value = "";
+    document.getElementById("quizNoteInput").value = "";
+    document.getElementById("quizAnswerInputFill").value = "";
+    document.getElementById("quizTypeSel").value = "mc";
+    document.getElementById("quizOptionsWrap").innerHTML = "";
+    addOptionRow(); addOptionRow();
+    onQuizTypeChange();
+    document.getElementById("quizSaveBtn").textContent = "เพิ่มข้อ";
+    document.getElementById("quizCancelBtn").classList.add("hidden");
+    document.getElementById("quizItemMsg").innerHTML = "";
+  }
+
+  function editQuizItem(item){
+    editingQuizItemId = item.id;
+    document.getElementById("quizItemIdField").value = item.id;
+    document.getElementById("quizTextInput").value = item.text;
+    document.getElementById("quizNoteInput").value = item.note || "";
+    document.getElementById("quizTypeSel").value = item.type;
+    onQuizTypeChange();
+    if (item.type === "mc"){
+      document.getElementById("quizOptionsWrap").innerHTML = "";
+      (item.options && item.options.length ? item.options : ["", ""]).forEach(o => addOptionRow(o));
+      refreshAnswerOptions();
+      document.getElementById("quizAnswerSelectMc").value = item.answer;
+    } else if (item.type === "tf"){
+      document.getElementById("quizAnswerSelectTf").value = item.answer;
+    } else {
+      document.getElementById("quizAnswerInputFill").value = item.answer;
+    }
+    document.getElementById("quizSaveBtn").textContent = "บันทึกการแก้ไข";
+    document.getElementById("quizCancelBtn").classList.remove("hidden");
+    document.getElementById("quizItemForm").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function deleteQuizItem(item){
+    if (!confirm("ลบข้อนี้ออกจากแบบทดสอบท้ายบท?")) return;
+    await apiCall("adminDeleteLessonQuizItem", { adminPassword: adminPass(), id: item.id });
+    loadQuizList();
+  }
+
+  function onQuizTypeChange(){
+    const type = document.getElementById("quizTypeSel").value;
+    document.getElementById("quizOptionsField").classList.toggle("hidden", type !== "mc");
+    document.getElementById("quizAnswerFieldMc").classList.toggle("hidden", type !== "mc");
+    document.getElementById("quizAnswerFieldTf").classList.toggle("hidden", type !== "tf");
+    document.getElementById("quizAnswerFieldFill").classList.toggle("hidden", type !== "fill");
+    if (type === "mc") refreshAnswerOptions();
+  }
+
+  function addOptionRow(value){
+    const wrap = document.getElementById("quizOptionsWrap");
+    if (wrap.children.length >= LET.length) return;
+    const row = document.createElement("div");
+    row.className = "optrow";
+    row.innerHTML = `
+      <span class="optn">${LET[wrap.children.length]}</span>
+      <input type="text" class="optInput" value="${escHtml(value || "")}" placeholder="ตัวเลือกที่ ${LET[wrap.children.length]}">
+      <button class="del" type="button">ลบ</button>
+    `;
+    wrap.appendChild(row);
+    row.querySelector(".optInput").oninput = refreshAnswerOptions;
+    row.querySelector(".del").onclick = () => {
+      if (wrap.children.length <= 2) return;
+      row.remove();
+      renumberOptions();
+      refreshAnswerOptions();
+    };
+    renumberOptions();
+  }
+
+  function renumberOptions(){
+    [...document.querySelectorAll("#quizOptionsWrap .optrow")].forEach((row, i) => {
+      row.querySelector(".optn").textContent = LET[i];
+      row.querySelector(".optInput").placeholder = "ตัวเลือกที่ " + LET[i];
+    });
+  }
+
+  function currentOptions(){
+    return [...document.querySelectorAll("#quizOptionsWrap .optInput")].map(i => i.value.trim()).filter(Boolean);
+  }
+
+  function refreshAnswerOptions(){
+    const sel = document.getElementById("quizAnswerSelectMc");
+    const prev = sel.value;
+    const opts = currentOptions();
+    sel.innerHTML = opts.map(o => `<option value="${escHtml(o)}">${escHtml(o)}</option>`).join("");
+    if (opts.includes(prev)) sel.value = prev;
+  }
+
+  async function onQuizItemSubmit(e){
+    e.preventDefault();
+    const msg = document.getElementById("quizItemMsg");
+    const type = document.getElementById("quizTypeSel").value;
+    const text = document.getElementById("quizTextInput").value.trim();
+    const note = document.getElementById("quizNoteInput").value.trim();
+    if (!text){ msg.innerHTML = '<div class="msg bad">กรุณากรอกโจทย์</div>'; return; }
+
+    let options = [], answer = "";
+    if (type === "mc"){
+      options = currentOptions();
+      answer = document.getElementById("quizAnswerSelectMc").value;
+      if (options.length < 2){ msg.innerHTML = '<div class="msg bad">ต้องมีตัวเลือกอย่างน้อย 2 ข้อ</div>'; return; }
+      if (!answer){ msg.innerHTML = '<div class="msg bad">กรุณาเลือกเฉลย</div>'; return; }
+    } else if (type === "tf"){
+      answer = document.getElementById("quizAnswerSelectTf").value;
+    } else {
+      answer = document.getElementById("quizAnswerInputFill").value.trim();
+      if (!answer){ msg.innerHTML = '<div class="msg bad">กรุณาใส่เฉลย</div>'; return; }
+    }
+
+    const btn = document.getElementById("quizSaveBtn");
+    btn.disabled = true;
+    const payload = { adminPassword: adminPass(), lessonId: currentQuizLessonId, type, text, options, answer, note };
+    if (editingQuizItemId) payload.id = editingQuizItemId;
+    const res = await apiCall("adminSaveLessonQuizItem", payload);
+    btn.disabled = false;
+
+    if (!res.ok){ msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "บันทึกไม่สำเร็จ")}</div>`; return; }
+
+    resetQuizItemForm();
+    msg.innerHTML = '<div class="msg ok">บันทึกแล้ว</div>';
+    loadQuizList();
+  }
+})();
+</script>
+</body>
+</html>

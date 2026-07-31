@@ -37,12 +37,16 @@
   renderFooter();
 
   document.getElementById("subjectList").innerHTML = visibleSubjects().map(s => `
-    <a class="card" href="exam.html?subject=${s.slug}">
+    <div class="card">
       <span class="tag">${s.icon} <span id="stat_${s.slug}">กำลังโหลด…</span></span>
       <h3>${s.name}</h3>
       <p>${s.desc}</p>
       <div class="meta"><span>⏱ ${s.minutes} นาที</span></div>
-    </a>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+        <a class="btn s" href="learn.html?subject=${s.slug}" style="flex:1">📖 เรียนเนื้อหา</a>
+        <a class="btn p" href="exam.html?subject=${s.slug}" style="flex:1">📝 ทำข้อสอบ</a>
+      </div>
+    </div>
   `).join("");
 
   visibleSubjects().forEach(async s => {

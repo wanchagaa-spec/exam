@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>บทเรียน — ข้อสอบ</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+  .lessoncontent{white-space:pre-wrap;line-height:1.75;font-size:16px;margin-bottom:30px}
+  .backlink{display:inline-block;margin-bottom:16px;font-size:14px;color:var(--muted2);font-weight:600}
+  .donebanner{background:rgba(26,154,85,.1);border:1px solid rgba(26,154,85,.35);color:var(--ok);
+    border-radius:var(--r-lg);padding:14px 18px;font-weight:700;margin-bottom:24px}
+  .fillbox{width:100%;min-height:var(--tap);padding:12px 15px;font:inherit;font-size:16px;
+    border:1.5px solid var(--line);border-radius:var(--r);background:#ffffff;color:var(--ink)}
+  .fillbox:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,111,176,.22)}
+  .q{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px 18px;margin-bottom:14px}
+  .qh{display:flex;gap:11px;margin-bottom:14px}
+  .qn{flex:none;width:30px;height:30px;border-radius:8px;background:var(--holo);
+    color:var(--accent-ink);font-size:14px;font-weight:800;display:grid;place-items:center}
+  .qt{font-weight:600;line-height:1.55;padding-top:2px}
+  .opts{display:flex;flex-direction:column;gap:9px}
+  .opt{display:flex;align-items:center;gap:12px;min-height:var(--tap);padding:10px 15px;
+    border:1.5px solid var(--line);border-radius:var(--r);background:#ffffff;cursor:pointer;
+    line-height:1.45;transition:.14s}
+  .opt:hover{border-color:var(--accent)}
+  .opt input{position:absolute;opacity:0;width:1px;height:1px}
+  .mk{flex:none;width:28px;height:28px;border:2px solid var(--line);border-radius:8px;
+    display:grid;place-items:center;font-size:13px;font-weight:800;color:var(--muted);transition:.14s}
+  .opt.on{border-color:var(--accent);background:rgba(255,111,176,.12)}
+  .opt.on .mk{border-color:var(--accent);background:var(--accent);color:#fff}
+  .rev{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:11px}
+  .rev.r{border-left:4px solid var(--ok)}
+  .rev.w{border-left:4px solid var(--danger)}
+  .rev .t{font-weight:600;margin-bottom:8px;line-height:1.5}
+  .rev .l{font-size:14.5px;color:var(--muted);margin-top:4px}
+  .rev .l b{color:var(--ink);font-weight:600}
+  .resultbanner{border-radius:var(--r-lg);padding:16px 20px;font-weight:700;margin-bottom:18px}
+  .resultbanner.ok{background:rgba(26,154,85,.1);border:1px solid rgba(26,154,85,.35);color:var(--ok)}
+  .resultbanner.no{background:rgba(217,45,45,.08);border:1px solid rgba(217,45,45,.3);color:var(--danger)}
+</style>
+</head>
+<body>
+
+<main>
+  <section class="section" style="padding-top:40px">
+    <div class="wrap" style="max-width:680px;margin:0 auto">
+      <a class="backlink" id="backLink" href="learn.html">‹ กลับไปหน้ารายการบทเรียน</a>
+      <div id="box"><p class="muted">กำลังโหลด…</p></div>
+    </div>
+  </section>
+</main>
+
+<script src="assets/site.js"></script>
+<script src="assets/demo-data.js"></script>
+<script>
+(function(){
+  "use strict";
+  if (!requireLogin()) return;
+
+  renderHeader("learn.html");
+  renderFooter();
+
+  const LET = ["ก","ข","ค","ง","จ","ฉ"];
+  const user = getSession();
+  const params = new URLSearchParams(location.search);
+  const lessonId = params.get("id") || "";
+  const subjectSlug = params.get("subject") || "";
+
+  document.getElementById("backLink").href = "learn.html" + (subjectSlug ? "?subject=" + encodeURIComponent(subjectSlug) : "");
+
+  let quizQuestions = [];
+  const ans = {};
+
+  load();
+
+  async function load(){
+    const res = await apiCall("getLesson", { id: lessonId, email: user.email });
+    const box = document.getElementById("box");
+    if (!res.ok){
+      box.innerHTML = `<div class="msg bad">${escHtml(res.error || "โหลดไม่สำเร็จ")}</div>`;
+      return;
+    }
+    quizQuestions = res.quiz || [];
+    const subjectMeta = SUBJECTS.find(s => s.slug === res.lesson.subject);
+    document.title = res.lesson.title + " — ข้อสอบ";
+    document.getElementById("backLink").href = "learn.html?subject=" + encodeURIComponent(res.lesson.subject);
+
+    box.innerHTML = `
+      <span class="eyebrow">${subjectMeta ? subjectMeta.icon + " " + escHtml(subjectMeta.name) + " › " : ""}${escHtml(res.lesson.strand)}</span>
+      <h1 style="margin:10px 0 20px">${escHtml(res.lesson.title)}</h1>
+      ${res.completed ? '<div class="donebanner">✅ คุณผ่านแบบทดสอบท้ายบทนี้แล้ว — อ่านทบทวนหรือทำแบบทดสอบซ้ำได้ตลอด</div>' : ""}
+      <div class="lessoncontent" id="lessonContent">${escHtml(res.lesson.content)}</div>
+      <div id="quizArea"></div>
+    `;
+    renderMath(box);
+    renderImages(document.getElementById("lessonContent"));
+
+    renderQuiz();
+  }
+
+  function renderQuiz(){
+    const area = document.getElementById("quizArea");
+    if (!quizQuestions.length){
+      area.innerHTML = '<p class="muted">ยังไม่มีแบบทดสอบท้ายบทนี้</p>';
+      return;
+    }
+
+    area.innerHTML = `<h3 style="margin-bottom:14px;font-size:18px">แบบทดสอบท้ายบท</h3>
+      <p class="muted" style="margin-bottom:16px;font-size:14px">ไม่จับเวลา ตอบถูกครบทุกข้อถึงจะทำเครื่องหมาย “อ่านแล้ว” ให้ — ทำซ้ำได้ไม่จำกัดจนกว่าจะผ่าน</p>
+      <div id="qBox"></div>
+      <div id="quizMsg"></div>
+      <button class="btn p" id="checkBtn" type="button">ตรวจคำตอบ</button>`;
+
+    const qBox = document.getElementById("qBox");
+    quizQuestions.forEach((q, i) => {
+      const c = document.createElement("div");
+      c.className = "q";
+      c.id = "qc_" + q.id;
+      c.innerHTML = '<div class="qh"><span class="qn">' + (i + 1) + '</span><div class="qt">' + escHtml(q.text) + "</div></div>";
+      c.appendChild(field(q));
+      qBox.appendChild(c);
+    });
+    renderMath(qBox);
+    renderImages(qBox);
+
+    document.getElementById("checkBtn").onclick = onCheck;
+  }
+
+  function field(q){
+    if (q.type === "fill"){
+      const i = document.createElement("input");
+      i.type = "text";
+      i.className = "fillbox";
+      i.placeholder = "พิมพ์คำตอบ";
+      i.setAttribute("aria-label", q.text);
+      i.oninput = () => { ans[q.id] = i.value.trim(); };
+      return i;
+    }
+    const list = (q.options && q.options.length) ? q.options : ["ถูก", "ผิด"];
+    const w = document.createElement("div");
+    w.className = "opts";
+    w.setAttribute("role", "radiogroup");
+    w.setAttribute("aria-label", q.text);
+    list.forEach((o, i) => {
+      const lab = document.createElement("label");
+      lab.className = "opt";
+      lab.innerHTML = '<input type="radio" name="' + q.id + '" value="' + escHtml(o) + '">' +
+        '<span class="mk">' + LET[i] + '</span><span>' + escHtml(o) + '</span>';
+      const inp = lab.querySelector("input");
+      inp.onchange = () => {
+        ans[q.id] = inp.value;
+        [...w.children].forEach(x => x.classList.remove("on"));
+        lab.classList.add("on");
+      };
+      w.appendChild(lab);
+    });
+    return w;
+  }
+
+  async function onCheck(){
+    const msg = document.getElementById("quizMsg");
+    const missing = quizQuestions.some(q => !ans[q.id]);
+    if (missing){ msg.innerHTML = '<div class="msg bad">กรุณาตอบให้ครบทุกข้อก่อนตรวจ</div>'; return; }
+
+    const btn = document.getElementById("checkBtn");
+    btn.disabled = true; btn.textContent = "กำลังตรวจ…";
+    const res = await apiCall("submitLessonQuiz", { lessonId, email: user.email, answers: ans });
+    btn.disabled = false; btn.textContent = "ตรวจคำตอบ";
+
+    if (!res.ok){ msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "ตรวจไม่สำเร็จ")}</div>`; return; }
+
+    let h = res.allCorrect
+      ? '<div class="resultbanner ok">🎉 ตอบถูกครบทุกข้อ! ระบบทำเครื่องหมาย “อ่านแล้ว” ให้แล้ว</div>'
+      : '<div class="resultbanner no">ยังตอบไม่ครบถูกทุกข้อ ลองทบทวนเนื้อหาข้างบนแล้วทำใหม่ได้เลย</div>';
+
+    quizQuestions.forEach((q, i) => {
+      const d = res.detail && res.detail[q.id];
+      if (!d) return;
+      const answerDisplay = String(d.answer || "").split("|").join(" หรือ ");
+      h += '<div class="rev ' + (d.correct ? "r" : "w") + '">' +
+        '<div class="t">' + (i + 1) + ". " + escHtml(q.text) + '</div>' +
+        '<div class="l">คำตอบของคุณ: <b>' + escHtml(ans[q.id] || "") + '</b></div>' +
+        (d.correct ? '' : '<div class="l">คำตอบที่ถูก: <b>' + escHtml(answerDisplay) + '</b></div>') +
+        (!d.correct && d.note ? '<div class="l">' + escHtml(d.note) + '</div>' : '') +
+        '</div>';
+    });
+    h += '<button class="btn s" id="retryBtn" type="button">ล้างคำตอบแล้วทำใหม่</button>';
+
+    msg.innerHTML = "";
+    document.getElementById("qBox").insertAdjacentHTML("afterend", '<div id="reviewBox">' + h + '</div>');
+    document.getElementById("checkBtn").classList.add("hidden");
+    renderMath(document.getElementById("reviewBox"));
+
+    document.getElementById("retryBtn").onclick = () => {
+      Object.keys(ans).forEach(k => delete ans[k]);
+      document.getElementById("reviewBox").remove();
+      document.getElementById("checkBtn").classList.remove("hidden");
+      renderQuiz();
+    };
+
+    if (res.allCorrect){
+      const existing = document.querySelector(".donebanner");
+      if (!existing){
+        document.getElementById("box").insertAdjacentHTML("afterbegin",
+          '<div class="donebanner">✅ คุณผ่านแบบทดสอบท้ายบทนี้แล้ว — อ่านทบทวนหรือทำแบบทดสอบซ้ำได้ตลอด</div>');
+      }
+    }
+    window.scrollTo({ top: document.getElementById("quizArea").offsetTop - 20, behavior: "smooth" });
+  }
+})();
+</script>
+</body>
+</html>

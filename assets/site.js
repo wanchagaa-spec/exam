@@ -371,7 +371,8 @@ function adminNavHtml(active){
   const items = [
     { href: "admin.html", label: "📚 คลังข้อสอบ / โครงสร้าง", key: "admin" },
     { href: "admin-add.html", label: "➕ เพิ่มทีละข้อ", key: "add" },
-    { href: "admin-import.html", label: "📥 นำเข้าหลายข้อ (JSON)", key: "import" }
+    { href: "admin-import.html", label: "📥 นำเข้าหลายข้อ (JSON)", key: "import" },
+    { href: "admin-lessons.html", label: "📖 เนื้อหาบทเรียน", key: "lessons" }
   ];
   return `<div class="adminnav">` + items.map(it =>
     `<a class="btn ${it.key === active ? "p" : "s"}" href="${it.href}" data-adminnav="${it.key}">${it.label}</a>`
@@ -618,6 +619,30 @@ function demoTrophyAction(action, payload){
     return { month, champions: ranked.filter(e => e.rank === 1) };
   });
   return { ok:true, months };
+}
+
+/* โหมดตัวอย่าง: เนื้อหาบทเรียน — เก็บบทเรียนต่อวิชา, แบบทดสอบท้ายบทต่อ lessonId, และประวัติอ่านผ่านแล้วรวมทุกวิชา
+   ตรรกะเดียวกับฝั่งเซิร์ฟเวอร์ใน gas/Code.gs (listLessons/getLesson/submitLessonQuiz) */
+function demoLessonsKey(subject){ return "examSiteDemoLessons_" + subject; }
+function demoLessonsLoad(subject){
+  try { return JSON.parse(localStorage.getItem(demoLessonsKey(subject)) || "[]"); } catch(e){ return []; }
+}
+function demoLessonsSave(subject, list){ localStorage.setItem(demoLessonsKey(subject), JSON.stringify(list)); }
+
+const DEMO_LESSON_QUIZ_KEY = "examSiteDemoLessonQuiz";
+function demoLessonQuizAllLoad(){
+  try { return JSON.parse(localStorage.getItem(DEMO_LESSON_QUIZ_KEY) || "[]"); } catch(e){ return []; }
+}
+function demoLessonQuizAllSave(list){ localStorage.setItem(DEMO_LESSON_QUIZ_KEY, JSON.stringify(list)); }
+
+const DEMO_LESSON_PROGRESS_KEY = "examSiteDemoLessonProgress";
+function demoLessonProgressLoad(){
+  try { return JSON.parse(localStorage.getItem(DEMO_LESSON_PROGRESS_KEY) || "[]"); } catch(e){ return []; }
+}
+function demoLessonProgressSave(list){ localStorage.setItem(DEMO_LESSON_PROGRESS_KEY, JSON.stringify(list)); }
+function demoCompletedLessonIds(email){
+  if (!email) return new Set();
+  return new Set(demoLessonProgressLoad().filter(r => r.email === email).map(r => r.lessonId));
 }
 
 /* สรุปโครงสร้างชุดข้อสอบของวิชาหนึ่ง ใช้แสดงบนการ์ดรายวิชา/หน้าเริ่มทำข้อสอบ (public, ไม่ต้องล็อกอิน/รหัสแอดมิน) */
@@ -1035,6 +1060,126 @@ async function demoApi(action, payload){
 
   if (action === "trophyLeaderboard" || action === "trophyAllTime" || action === "trophyHallOfFame"){
     return demoTrophyAction(action, payload);
+  }
+
+  if (action === "listLessons"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    const done = demoCompletedLessonIds(email);
+    const lessons = demoLessonsLoad(payload.subject).filter(l => l.visible !== false)
+      .sort((a, b) => a.order - b.order)
+      .map(l => ({ id: l.id, strand: l.strand, order: l.order, title: l.title, completed: done.has(l.id) }));
+    return { ok:true, lessons };
+  }
+
+  if (action === "getLesson"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    let found = null, subjectOfLesson = null;
+    for (const s of SUBJECTS){
+      const l = demoLessonsLoad(s.slug).find(x => x.id === payload.id);
+      if (l){ found = l; subjectOfLesson = s.slug; break; }
+    }
+    if (!found) return { ok:false, error:"ไม่พบเนื้อหานี้" };
+    if (found.visible === false) return { ok:false, error:"เนื้อหานี้ยังไม่เปิดให้เข้าดู" };
+    const quiz = demoLessonQuizAllLoad().filter(q => q.lessonId === payload.id)
+      .map(q => ({ id:q.id, type:q.type, text:q.text, options:q.options || [] }));
+    return {
+      ok:true,
+      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title, content: found.content },
+      quiz,
+      completed: demoCompletedLessonIds(email).has(found.id)
+    };
+  }
+
+  if (action === "submitLessonQuiz"){
+    const email = String(payload.email || "").trim().toLowerCase();
+    if (!email) return { ok:false, error:"กรุณาเข้าสู่ระบบก่อน" };
+    const quizItems = demoLessonQuizAllLoad().filter(q => q.lessonId === payload.lessonId);
+    if (!quizItems.length) return { ok:false, error:"บทนี้ยังไม่มีแบบทดสอบท้ายบท" };
+    const ansIn = payload.answers || {};
+    let allCorrect = true;
+    const detail = {};
+    quizItems.forEach(q => {
+      const correct = answerMatches(q.type, ansIn[q.id], q.answer);
+      if (!correct) allCorrect = false;
+      detail[q.id] = { correct, answer: q.answer, note: q.note || "" };
+    });
+    if (allCorrect){
+      const list = demoLessonProgressLoad();
+      if (!list.some(r => r.email === email && r.lessonId === payload.lessonId)){
+        list.push({ email, lessonId: payload.lessonId, completedAt: new Date().toISOString() });
+        demoLessonProgressSave(list);
+      }
+    }
+    return { ok:true, allCorrect, detail };
+  }
+
+  if (action === "adminListLessons"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const quizItems = demoLessonQuizAllLoad();
+    const lessons = demoLessonsLoad(payload.subject).slice().sort((a, b) => a.order - b.order)
+      .map(l => Object.assign({ quizCount: quizItems.filter(q => q.lessonId === l.id).length }, l));
+    return { ok:true, lessons };
+  }
+
+  if (action === "adminSaveLesson"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const list = demoLessonsLoad(payload.subject);
+    const id = payload.id || ("lsn_" + Date.now().toString(36));
+    const idx = list.findIndex(x => x.id === id);
+    let order = idx >= 0 ? list[idx].order : list.filter(x => x.strand === payload.strand).length;
+    const lesson = { id, strand: payload.strand, order, title: payload.title, content: payload.content,
+                      visible: payload.visible !== false };
+    if (idx >= 0) list[idx] = lesson; else list.push(lesson);
+    demoLessonsSave(payload.subject, list);
+    return { ok:true, id };
+  }
+
+  if (action === "adminDeleteLesson"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    for (const s of SUBJECTS){
+      const list = demoLessonsLoad(s.slug);
+      if (list.some(x => x.id === payload.id)){
+        demoLessonsSave(s.slug, list.filter(x => x.id !== payload.id));
+        break;
+      }
+    }
+    demoLessonQuizAllSave(demoLessonQuizAllLoad().filter(q => q.lessonId !== payload.id));
+    demoLessonProgressSave(demoLessonProgressLoad().filter(r => r.lessonId !== payload.id));
+    return { ok:true };
+  }
+
+  if (action === "adminReorderLessons"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const list = demoLessonsLoad(payload.subject);
+    (payload.orderedIds || []).forEach((id, i) => {
+      const l = list.find(x => x.id === id);
+      if (l) l.order = i;
+    });
+    demoLessonsSave(payload.subject, list);
+    return { ok:true };
+  }
+
+  if (action === "adminListLessonQuiz"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    return { ok:true, quiz: demoLessonQuizAllLoad().filter(q => q.lessonId === payload.lessonId) };
+  }
+
+  if (action === "adminSaveLessonQuizItem"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const list = demoLessonQuizAllLoad();
+    const id = payload.id || ("lq_" + Date.now().toString(36));
+    const idx = list.findIndex(x => x.id === id);
+    const item = { id, lessonId: payload.lessonId, type: payload.type, text: payload.text,
+                    options: payload.options || [], answer: payload.answer, note: payload.note || "" };
+    if (idx >= 0) list[idx] = item; else list.push(item);
+    demoLessonQuizAllSave(list);
+    return { ok:true, id };
+  }
+
+  if (action === "adminDeleteLessonQuizItem"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    demoLessonQuizAllSave(demoLessonQuizAllLoad().filter(q => q.id !== payload.id));
+    return { ok:true };
   }
 
   if (action === "uploadQuestionImage"){
