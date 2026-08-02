@@ -12,18 +12,22 @@
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
 <style>
-  .strandblock{margin-bottom:34px}
-  .strandhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
-  .strandhead h2{font-size:18px}
-  .strandhead .pct{font-size:13.5px;color:var(--muted2);font-weight:700}
-  .progressbar{height:8px;border-radius:99px;background:var(--card);overflow:hidden;margin-bottom:14px}
-  .progressbar i{display:block;height:100%;background:var(--holo)}
-  .lessonrow{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
-    border-radius:var(--r-lg);padding:14px 18px;margin-bottom:10px}
-  .lessonrow:hover{background:var(--card-hi)}
-  .lessonrow .check{flex:none;font-size:20px;width:26px;text-align:center}
-  .lessonrow .title{flex:1;font-weight:700;font-size:15px}
-  .lessonrow .arrow{flex:none;color:var(--muted2)}
+  /* ── การ์ด "โครงสร้างเนื้อหา" — ลิสต์สาระ/บทเรียนแบบเอกสารโครงสร้างข้อสอบ ── */
+  .structcard{border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--bg0)}
+  .structhead{background:var(--holo);color:var(--accent-ink);font-weight:800;font-size:16px;padding:14px 22px}
+  .structintro{padding:16px 22px;font-weight:700;font-size:15px;border-bottom:1px solid var(--line)}
+  .structsection{border-bottom:1px solid var(--line)}
+  .structsection:last-child{border-bottom:none}
+  .structsection-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:12px 22px;background:rgba(255,111,176,.07);font-weight:700;color:var(--accent-ink);font-size:15px}
+  .structsection-head .cnt{font-size:12.5px;font-weight:700;color:var(--muted2);white-space:nowrap}
+  .topiclist{padding:6px 12px}
+  .topiclist a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r);
+    font-size:14.5px;color:var(--ink)}
+  .topiclist a:hover{background:var(--card)}
+  .topiclist .num{flex:none;color:var(--muted2);font-weight:700;min-width:26px}
+  .topiclist .title{flex:1}
+  .topiclist .check{flex:none;font-size:17px}
 </style>
 </head>
 <body>
@@ -95,25 +99,32 @@
       return;
     }
 
-    box.innerHTML = usedStrands.map(strand => {
+    const sections = usedStrands.map((strand, i) => {
       const lessons = byStrand[strand];
       const doneCount = lessons.filter(l => l.completed).length;
-      const pct = Math.round(doneCount / lessons.length * 100);
       return `
-        <div class="strandblock">
-          <div class="strandhead">
-            <h2>${escHtml(strand)}</h2>
-            <span class="pct">อ่านแล้ว ${doneCount}/${lessons.length}</span>
+        <div class="structsection">
+          <div class="structsection-head">
+            <span>ส่วนที่ ${i + 1} : ${escHtml(strand)}</span>
+            <span class="cnt">อ่านแล้ว ${doneCount}/${lessons.length}</span>
           </div>
-          <div class="progressbar"><i style="width:${pct}%"></i></div>
-          ${lessons.map(l => `
-            <a class="lessonrow" href="lesson.html?id=${encodeURIComponent(l.id)}&subject=${encodeURIComponent(subject.slug)}">
-              <span class="check">${l.completed ? "✅" : "⬜"}</span>
-              <span class="title">${escHtml(l.title)}</span>
-              <span class="arrow">›</span>
-            </a>`).join("")}
+          <div class="topiclist">
+            ${lessons.map((l, j) => `
+              <a href="lesson.html?id=${encodeURIComponent(l.id)}&subject=${encodeURIComponent(subject.slug)}">
+                <span class="num">${j + 1})</span>
+                <span class="title">${escHtml(l.title)}</span>
+                <span class="check">${l.completed ? "✅" : "⬜"}</span>
+              </a>`).join("")}
+          </div>
         </div>`;
     }).join("");
+
+    box.innerHTML = `
+      <div class="structcard">
+        <div class="structhead">📖 โครงสร้างเนื้อหา</div>
+        <p class="structintro">วิชา${escHtml(subject.name)} มีเนื้อหาทั้งหมด ${usedStrands.length} สาระ ดังนี้</p>
+        ${sections}
+      </div>`;
   }
 })();
 </script>
