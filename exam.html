@@ -80,6 +80,26 @@
   .sechead{font-weight:800;font-size:15.5px;color:var(--accent);margin:26px 0 12px;
     padding-top:18px;border-top:2px solid var(--line)}
   .sechead:first-child{margin-top:0;padding-top:0;border-top:none}
+
+  /* ── กระดาษทด — วาดด้วยนิ้ว/สไตลัส (เช่น Apple Pencil บน iPad) ทำการคำนวณคร่าวๆ ระหว่างทำข้อสอบ
+     ไม่ใช่ส่วนหนึ่งของคำตอบที่ส่งตรวจ แค่ช่วยคิดเลขในหน้าเดียวกัน ไม่ต้องสลับไปแอปอื่น ── */
+  .scratchfab{position:fixed;right:16px;bottom:118px;z-index:41;width:52px;height:52px;border-radius:50%;
+    background:var(--holo);color:var(--accent-ink);border:none;font-size:22px;box-shadow:0 6px 18px rgba(0,0,0,.28);
+    cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .scratchfab:active{transform:scale(.95)}
+  .scratchpanel{position:fixed;left:0;right:0;bottom:0;z-index:45;height:46vh;max-height:520px;
+    background:#fffef6;border-top:2px solid var(--line);box-shadow:0 -8px 28px rgba(0,0,0,.18);
+    display:flex;flex-direction:column}
+  .scratchpanel.hidden{display:none}
+  .scratchbar{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line);
+    background:var(--card);flex-wrap:wrap;flex:none}
+  .scratchbar .lbl{font-weight:700;font-size:13.5px;color:var(--muted);margin-right:auto}
+  .scratchbtn{flex:none;width:34px;height:34px;border-radius:8px;border:1.5px solid var(--line);background:#fff;
+    cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center}
+  .scratchbtn.on{border-color:var(--accent);background:rgba(255,111,176,.15)}
+  .swatch{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+  .swatch.on{border-color:var(--accent-ink)}
+  #scratchCanvas{flex:1;width:100%;touch-action:none;cursor:crosshair;background:#fffef6}
 </style>
 </head>
 <body>
@@ -239,6 +259,19 @@
           </div>
         </div>
       </div>
+      <button class="scratchfab" id="scratchToggle" type="button" title="กระดาษทด" aria-label="กระดาษทด">✏️</button>
+      <div class="scratchpanel hidden" id="scratchPanel">
+        <div class="scratchbar">
+          <span class="lbl">กระดาษทด</span>
+          <button class="swatch on" data-color="#111111" style="background:#111111" title="ปากกาดำ" type="button"></button>
+          <button class="swatch" data-color="#d92d2d" style="background:#d92d2d" title="ปากกาแดง" type="button"></button>
+          <button class="swatch" data-color="#2a63e0" style="background:#2a63e0" title="ปากกาน้ำเงิน" type="button"></button>
+          <button class="scratchbtn" id="scratchErase" title="ยางลบ" type="button">🧽</button>
+          <button class="scratchbtn" id="scratchClear" title="ล้างทั้งหมด" type="button">🗑️</button>
+          <button class="scratchbtn" id="scratchClose" title="ปิด" type="button">✕</button>
+        </div>
+        <canvas id="scratchCanvas"></canvas>
+      </div>
     `;
 
     const box = document.getElementById("qs");
@@ -263,6 +296,78 @@
     renderImages(box);
 
     document.getElementById("send").onclick = onSend;
+    initScratchpad();
+  }
+
+  function initScratchpad(){
+    const fab = document.getElementById("scratchToggle");
+    const panel = document.getElementById("scratchPanel");
+    const canvas = document.getElementById("scratchCanvas");
+    const ctx = canvas.getContext("2d");
+    let color = "#111111", erasing = false, drawing = false, sized = false;
+
+    function sizeCanvas(){
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      // เก็บรูปที่ทดไว้ก่อนปรับขนาด กันเส้นหายตอนหมุนจอ/เปิดคีย์บอร์ดแล้วขนาดจอเปลี่ยน
+      const prev = (canvas.width && canvas.height) ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      if (prev) ctx.putImageData(prev, 0, 0);
+      sized = true;
+    }
+    function pos(e){
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      return { x: (e.clientX - rect.left) * dpr, y: (e.clientY - rect.top) * dpr };
+    }
+
+    canvas.addEventListener("pointerdown", e => {
+      drawing = true;
+      canvas.setPointerCapture(e.pointerId);
+      const p = pos(e);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+    });
+    canvas.addEventListener("pointermove", e => {
+      if (!drawing) return;
+      const p = pos(e);
+      const dpr = window.devicePixelRatio || 1;
+      ctx.globalCompositeOperation = erasing ? "destination-out" : "source-over";
+      ctx.lineWidth = (erasing ? 22 : 2.5) * dpr;
+      ctx.strokeStyle = color;
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    });
+    const stopDraw = () => { drawing = false; };
+    canvas.addEventListener("pointerup", stopDraw);
+    canvas.addEventListener("pointercancel", stopDraw);
+    canvas.addEventListener("pointerleave", stopDraw);
+
+    panel.querySelectorAll(".swatch").forEach(btn => {
+      btn.onclick = () => {
+        panel.querySelectorAll(".swatch").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        color = btn.dataset.color;
+        erasing = false;
+        document.getElementById("scratchErase").classList.remove("on");
+      };
+    });
+    document.getElementById("scratchErase").onclick = (e) => {
+      erasing = !erasing;
+      e.currentTarget.classList.toggle("on", erasing);
+    };
+    document.getElementById("scratchClear").onclick = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+    document.getElementById("scratchClose").onclick = () => panel.classList.add("hidden");
+
+    fab.onclick = () => {
+      panel.classList.toggle("hidden");
+      if (!panel.classList.contains("hidden") && !sized) sizeCanvas();
+    };
+    window.addEventListener("resize", () => { if (!panel.classList.contains("hidden")) sizeCanvas(); });
   }
 
   function field(q){
