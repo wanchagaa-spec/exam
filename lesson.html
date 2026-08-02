@@ -81,6 +81,7 @@
 
   document.getElementById("backLink").href = "learn.html" + (subjectSlug ? "?subject=" + encodeURIComponent(subjectSlug) : "");
   document.getElementById("subjectNav").innerHTML = subjectNavHtml(subjectSlug);
+  renderSidebar(subjectSlug);
 
   let quizQuestions = [];
   const ans = {};
@@ -99,6 +100,7 @@
     document.title = res.lesson.title + " — ข้อสอบ";
     document.getElementById("backLink").href = "learn.html?subject=" + encodeURIComponent(res.lesson.subject);
     document.getElementById("subjectNav").innerHTML = subjectNavHtml(res.lesson.subject);
+    renderSidebar(res.lesson.subject);
 
     box.innerHTML = `
       <span class="eyebrow">${subjectMeta ? subjectMeta.icon + " " + escHtml(subjectMeta.name) + " › " : ""}${escHtml(res.lesson.strand)}</span>

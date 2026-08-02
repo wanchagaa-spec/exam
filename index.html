@@ -84,6 +84,7 @@
 <script>
   renderHeader("index.html");
   renderFooter();
+  renderSidebar();
 
   document.getElementById("subjectPreview").innerHTML = visibleSubjects().slice(0,3).map(s => `
     <a class="card" href="exam.html?subject=${s.slug}">

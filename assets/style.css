@@ -140,6 +140,21 @@ header.site{position:sticky;top:0;z-index:50;
   .subjectnav-item.on{border-color:var(--accent)}
 }
 
+/* ── sitesidebar: เมนูวิชาปักหมุดขอบซ้ายจริงของจอ (แบบ Facebook) ──
+   แสดงเฉพาะจอกว้างมาก (≥1550px) เพราะต้องมีที่ว่างข้างเนื้อหากลางจอ (var(--wrap)) พอไม่ทับกัน
+   จอแคบกว่านี้ไม่แสดง ใช้ไอคอน 📖 บน header หรือแถบเลือกวิชาในหน้า learn.html/lesson.html แทน
+   ขึ้นในทุกหน้าที่มีเนื้อหาหลัก ยกเว้น exam.html (โฟกัสทำข้อสอบ) และหน้าแอดมิน/login/register ── */
+.sitesidebar{
+  display:none;position:fixed;top:84px;left:calc(50% - (var(--wrap) / 2) - 210px);width:190px;
+  flex-direction:column;gap:2px;max-height:calc(100vh - 100px);overflow-y:auto;z-index:30;
+}
+@media (min-width:1550px){
+  .sitesidebar{display:flex}
+  /* หน้า learn.html/lesson.html มีแถบเลือกวิชาของตัวเองอยู่แล้ว จอกว้างขนาดนี้ sitesidebar ทำหน้าที่แทนได้เลย ไม่ต้องซ้ำ */
+  .learnlayout .subjectnav{display:none}
+  .learnlayout{display:block}
+}
+
 /* ── หน้าต่างโพสต์ด่วน (เปิดจากปุ่ม + บน header) ─────────────────────── */
 .pmask{position:fixed;inset:0;z-index:70;background:rgba(10,4,20,.6);display:none;place-items:center;padding:20px}
 .pmask:not(.hidden){display:grid}

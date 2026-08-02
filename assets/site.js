@@ -51,6 +51,24 @@ function subjectNavHtml(activeSlug){
     </a>`).join("");
 }
 
+/** เมนูวิชาปักหมุดขอบซ้ายจอ (เห็นเฉพาะจอกว้างมาก ดู .sitesidebar ใน style.css) — เรียกท้ายสคริปต์ของทุกหน้าเนื้อหาหลัก
+    (index/news/learn/lesson/account/trophy/search/downloads/contact) ยกเว้น exam.html และหน้าแอดมิน/login/register */
+function renderSidebar(activeSlug){
+  const html = subjectNavHtml(activeSlug || "");
+  const existing = document.getElementById("siteSidebar");
+  if (existing){ existing.innerHTML = html; return; }
+  document.body.insertAdjacentHTML("beforeend", `<aside class="sitesidebar" id="siteSidebar">${html}</aside>`);
+  // ตำแหน่งบน (top) วัดจากความสูงจริงของ header แทนค่าคงที่ เพราะโหมดตัวอย่างมีแบนเนอร์แถบบนเพิ่มเข้ามาให้ header สูงกว่าปกติ
+  const positionSidebar = () => {
+    const el = document.getElementById("siteSidebar");
+    const header = document.querySelector("header.site");
+    if (el && header) el.style.top = (header.getBoundingClientRect().bottom + 14) + "px";
+  };
+  positionSidebar();
+  window.addEventListener("resize", positionSidebar);
+  window.addEventListener("scroll", positionSidebar, { passive: true });
+}
+
 const NOTIF_LABEL = { like: "กดถูกใจโพสต์ของคุณ", comment: "แสดงความคิดเห็นในโพสต์ของคุณ" };
 function avatarHtml(user, size){
   size = size || 34;

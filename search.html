@@ -43,6 +43,7 @@
   "use strict";
   renderHeader();
   renderFooter();
+  renderSidebar();
 
   const q = new URLSearchParams(location.search).get("q") || "";
   document.getElementById("qHeading").textContent = q ? `ผลการค้นหา: "${q}"` : "ผลการค้นหา";

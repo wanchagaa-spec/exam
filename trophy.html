@@ -73,6 +73,7 @@
   "use strict";
   renderHeader("trophy.html");
   renderFooter();
+  renderSidebar();
 
   const user = getSession();
   const viewerEmail = user ? user.email.toLowerCase() : "";

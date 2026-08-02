@@ -64,6 +64,7 @@
   const subject = SUBJECTS.find(s => s.slug === slug);
 
   document.getElementById("subjectNav").innerHTML = subjectNavHtml(slug);
+  renderSidebar(slug);
 
   if (!subject){
     document.getElementById("pageTitle").textContent = "ไม่พบวิชานี้";

@@ -35,6 +35,7 @@
 <script>
   renderHeader("downloads.html");
   renderFooter();
+  renderSidebar();
 
   document.getElementById("downloadList").innerHTML = DOWNLOADS.map(d => `
     <a class="card" href="${d.href}" style="display:flex;align-items:center;gap:16px">
