@@ -81,25 +81,40 @@
     padding-top:18px;border-top:2px solid var(--line)}
   .sechead:first-child{margin-top:0;padding-top:0;border-top:none}
 
-  /* ── กระดาษทด — วาดด้วยนิ้ว/สไตลัส (เช่น Apple Pencil บน iPad) ทำการคำนวณคร่าวๆ ระหว่างทำข้อสอบ
-     ไม่ใช่ส่วนหนึ่งของคำตอบที่ส่งตรวจ แค่ช่วยคิดเลขในหน้าเดียวกัน ไม่ต้องสลับไปแอปอื่น ── */
+  /* ── กระดาษทด — หน้าต่างลอยลากย้าย/ปรับขนาดได้ หรือแบ่งครึ่งจอกับข้อสอบ วาดด้วยสไตลัส/เมาส์ (นิ้วไว้เลื่อนหน้าแทน)
+     เป็นหน้ากระดาษยาว (900×2600px) เลื่อนขึ้นลงได้ ซูมเข้า-ออกได้ ไม่ใช่ส่วนหนึ่งของคำตอบที่ส่งตรวจ ── */
   .scratchfab{position:fixed;right:16px;bottom:118px;z-index:41;width:52px;height:52px;border-radius:50%;
     background:var(--holo);color:var(--accent-ink);border:none;font-size:22px;box-shadow:0 6px 18px rgba(0,0,0,.28);
     cursor:pointer;display:flex;align-items:center;justify-content:center}
   .scratchfab:active{transform:scale(.95)}
-  .scratchpanel{position:fixed;left:0;right:0;bottom:0;z-index:45;height:46vh;max-height:520px;
-    background:#fffef6;border-top:2px solid var(--line);box-shadow:0 -8px 28px rgba(0,0,0,.18);
-    display:flex;flex-direction:column}
+
+  .scratchpanel{position:fixed;z-index:45;background:#fffef6;border:1.5px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:0 14px 40px rgba(0,0,0,.28);display:flex;flex-direction:column;overflow:hidden;
+    min-width:260px;min-height:240px}
   .scratchpanel.hidden{display:none}
-  .scratchbar{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line);
-    background:var(--card);flex-wrap:wrap;flex:none}
-  .scratchbar .lbl{font-weight:700;font-size:13.5px;color:var(--muted);margin-right:auto}
-  .scratchbtn{flex:none;width:34px;height:34px;border-radius:8px;border:1.5px solid var(--line);background:#fff;
-    cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center}
+  .scratchpanel.split{border-radius:0;box-shadow:-10px 0 30px rgba(0,0,0,.2);
+    right:0 !important;bottom:0 !important;left:auto !important;width:50vw !important}
+
+  .scratchbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);
+    background:var(--card);flex-wrap:wrap;flex:none;cursor:move;user-select:none;touch-action:none}
+  .scratchbar .lbl{font-weight:700;font-size:13px;color:var(--muted);margin-right:2px}
+  .scratchbtn{flex:none;width:30px;height:30px;border-radius:8px;border:1.5px solid var(--line);background:#fff;
+    cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0}
   .scratchbtn.on{border-color:var(--accent);background:rgba(255,111,176,.15)}
-  .swatch{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+  .swatch{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
   .swatch.on{border-color:var(--accent-ink)}
-  #scratchCanvas{flex:1;width:100%;touch-action:none;cursor:crosshair;background:#fffef6}
+  .zoomlabel{flex:none;font-size:11.5px;font-weight:700;color:var(--muted2);width:36px;text-align:center}
+
+  .scratchscroll{flex:1;overflow:auto;background:#efece0;position:relative}
+  #scratchCanvas{display:block;transform-origin:0 0;background:#fffef6;box-shadow:0 0 0 1px rgba(0,0,0,.05);cursor:crosshair}
+
+  .scratchresize{position:absolute;right:0;bottom:0;width:20px;height:20px;cursor:nwse-resize;z-index:2;
+    background:linear-gradient(135deg,transparent 50%,var(--muted2) 50%);opacity:.55;touch-action:none}
+  .scratchpanel.split .scratchresize{display:none}
+
+  /* โหมดแบ่งครึ่งจอ — บีบพื้นที่ทำข้อสอบให้เหลือครึ่งซ้าย ให้กระดาษทดที่ปักขวาไม่ทับกัน */
+  body.examsplit #app{width:50vw}
+  body.examsplit .foot{width:50vw;right:auto}
 </style>
 </head>
 <body>
@@ -261,16 +276,23 @@
       </div>
       <button class="scratchfab" id="scratchToggle" type="button" title="กระดาษทด" aria-label="กระดาษทด">✏️</button>
       <div class="scratchpanel hidden" id="scratchPanel">
-        <div class="scratchbar">
+        <div class="scratchbar" id="scratchDragHandle">
           <span class="lbl">กระดาษทด</span>
           <button class="swatch on" data-color="#111111" style="background:#111111" title="ปากกาดำ" type="button"></button>
           <button class="swatch" data-color="#d92d2d" style="background:#d92d2d" title="ปากกาแดง" type="button"></button>
           <button class="swatch" data-color="#2a63e0" style="background:#2a63e0" title="ปากกาน้ำเงิน" type="button"></button>
           <button class="scratchbtn" id="scratchErase" title="ยางลบ" type="button">🧽</button>
+          <button class="scratchbtn" id="scratchZoomOut" title="ซูมออก" type="button">➖</button>
+          <span class="zoomlabel" id="zoomLabel">100%</span>
+          <button class="scratchbtn" id="scratchZoomIn" title="ซูมเข้า" type="button">➕</button>
+          <button class="scratchbtn" id="scratchSplit" title="แบ่งครึ่งจอ" type="button">⬛</button>
           <button class="scratchbtn" id="scratchClear" title="ล้างทั้งหมด" type="button">🗑️</button>
           <button class="scratchbtn" id="scratchClose" title="ปิด" type="button">✕</button>
         </div>
-        <canvas id="scratchCanvas"></canvas>
+        <div class="scratchscroll" id="scratchScroll">
+          <canvas id="scratchCanvas"></canvas>
+        </div>
+        <div class="scratchresize" id="scratchResize"></div>
       </div>
     `;
 
@@ -302,38 +324,60 @@
   function initScratchpad(){
     const fab = document.getElementById("scratchToggle");
     const panel = document.getElementById("scratchPanel");
+    const dragHandle = document.getElementById("scratchDragHandle");
     const canvas = document.getElementById("scratchCanvas");
+    const resizeHandle = document.getElementById("scratchResize");
     const ctx = canvas.getContext("2d");
-    let color = "#111111", erasing = false, drawing = false, sized = false;
+    let color = "#111111", erasing = false, drawing = false, sized = false, zoom = 1, splitOn = false;
+    let floatingRect = null; // จำตำแหน่ง/ขนาดหน้าต่างลอยล่าสุด ไว้กลับมาใช้ตอนสลับออกจากโหมดแบ่งครึ่งจอ
 
-    function sizeCanvas(){
-      const rect = canvas.getBoundingClientRect();
+    const PAGE_W = 900, PAGE_H = 2600; // ขนาด "หน้ากระดาษ" คงที่ — ยาวกว่าจอมาก เลื่อนดูได้ทั้งหน้า ไม่ต้องรีไซส์ตามหน้าต่าง
+
+    function sizeCanvasOnce(){
+      if (sized) return;
       const dpr = window.devicePixelRatio || 1;
-      // เก็บรูปที่ทดไว้ก่อนปรับขนาด กันเส้นหายตอนหมุนจอ/เปิดคีย์บอร์ดแล้วขนาดจอเปลี่ยน
-      const prev = (canvas.width && canvas.height) ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
-      canvas.width = Math.round(rect.width * dpr);
-      canvas.height = Math.round(rect.height * dpr);
+      canvas.width = PAGE_W * dpr;
+      canvas.height = PAGE_H * dpr;
+      canvas.style.width = PAGE_W + "px";
+      canvas.style.height = PAGE_H + "px";
       ctx.lineCap = "round"; ctx.lineJoin = "round";
-      if (prev) ctx.putImageData(prev, 0, 0);
       sized = true;
     }
+    function applyZoom(){
+      canvas.style.transform = "scale(" + zoom + ")";
+      document.getElementById("zoomLabel").textContent = Math.round(zoom * 100) + "%";
+    }
+    function defaultFloatingRect(){
+      const w = Math.min(380, window.innerWidth - 32);
+      const h = Math.min(460, window.innerHeight - 160);
+      return { w, h, left: window.innerWidth - w - 18, top: Math.max(70, window.innerHeight - h - 130) };
+    }
+    function applyRect(r){
+      panel.style.width = r.w + "px";
+      panel.style.height = r.h + "px";
+      panel.style.left = r.left + "px";
+      panel.style.top = r.top + "px";
+    }
+    // แปลงพิกัดจากจอเป็นพิกัดในบิตแมพแคนวาส — ใช้อัตราส่วนจาก getBoundingClientRect
+    // ครอบคลุมทั้งซูม (CSS transform) และ devicePixelRatio ในสูตรเดียว ไม่ต้องคำนวณแยก
     function pos(e){
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      return { x: (e.clientX - rect.left) * dpr, y: (e.clientY - rect.top) * dpr };
+      return { x: (e.clientX - rect.left) / rect.width * canvas.width, y: (e.clientY - rect.top) / rect.height * canvas.height };
     }
 
     canvas.addEventListener("pointerdown", e => {
+      if (e.pointerType === "touch") return; // นิ้วไว้เลื่อนหน้ากระดาษ (สโครลปกติ) ปากกา/เมาส์เท่านั้นที่วาด
       drawing = true;
       canvas.setPointerCapture(e.pointerId);
       const p = pos(e);
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
+      e.preventDefault();
     });
     canvas.addEventListener("pointermove", e => {
-      if (!drawing) return;
-      const p = pos(e);
+      if (!drawing || e.pointerType === "touch") return;
       const dpr = window.devicePixelRatio || 1;
+      const p = pos(e);
       ctx.globalCompositeOperation = erasing ? "destination-out" : "source-over";
       ctx.lineWidth = (erasing ? 22 : 2.5) * dpr;
       ctx.strokeStyle = color;
@@ -362,12 +406,76 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
     document.getElementById("scratchClose").onclick = () => panel.classList.add("hidden");
+    document.getElementById("scratchZoomIn").onclick = () => { zoom = Math.min(3, zoom + 0.25); applyZoom(); };
+    document.getElementById("scratchZoomOut").onclick = () => { zoom = Math.max(0.5, zoom - 0.25); applyZoom(); };
+    // เริ่ม/สิ้นสุดตรง "ใต้ header" พอดี ไม่ใช่ top:0 ตายตัว เพราะโหมดตัวอย่างมีแบนเนอร์แถบบนทำให้ header ยังไม่ขยับไปสุดจอตอนหน้าเพิ่งโหลด
+    function positionSplit(){
+      if (!splitOn) return;
+      const header = document.querySelector("header.site");
+      const top = header ? header.getBoundingClientRect().bottom : 0;
+      panel.style.top = top + "px";
+      panel.style.height = "calc(100vh - " + top + "px)";
+    }
+    document.getElementById("scratchSplit").onclick = (e) => {
+      splitOn = !splitOn;
+      e.currentTarget.classList.toggle("on", splitOn);
+      document.body.classList.toggle("examsplit", splitOn);
+      panel.classList.toggle("split", splitOn);
+      if (splitOn) positionSplit();
+      else applyRect(floatingRect || defaultFloatingRect());
+    };
+    window.addEventListener("resize", positionSplit);
+    window.addEventListener("scroll", positionSplit, { passive: true });
 
     fab.onclick = () => {
+      const willShow = panel.classList.contains("hidden");
       panel.classList.toggle("hidden");
-      if (!panel.classList.contains("hidden") && !sized) sizeCanvas();
+      if (willShow){
+        sizeCanvasOnce();
+        if (!panel.style.width) applyRect(defaultFloatingRect());
+        applyZoom();
+      }
     };
-    window.addEventListener("resize", () => { if (!panel.classList.contains("hidden")) sizeCanvas(); });
+
+    // ── ลากย้ายหน้าต่าง (จับที่แถบหัว) — ปิดใช้งานระหว่างแบ่งครึ่งจอเพราะตำแหน่ง/ขนาดถูกล็อกไว้แล้ว ──
+    let dragOffset = null;
+    dragHandle.addEventListener("pointerdown", e => {
+      if (splitOn || e.target.closest("button")) return;
+      dragOffset = { x: e.clientX - panel.offsetLeft, y: e.clientY - panel.offsetTop };
+      dragHandle.setPointerCapture(e.pointerId);
+    });
+    dragHandle.addEventListener("pointermove", e => {
+      if (!dragOffset) return;
+      const left = Math.min(Math.max(0, e.clientX - dragOffset.x), window.innerWidth - 60);
+      const top = Math.min(Math.max(0, e.clientY - dragOffset.y), window.innerHeight - 40);
+      panel.style.left = left + "px";
+      panel.style.top = top + "px";
+    });
+    const stopDrag = () => {
+      if (dragOffset) floatingRect = { w: panel.offsetWidth, h: panel.offsetHeight, left: panel.offsetLeft, top: panel.offsetTop };
+      dragOffset = null;
+    };
+    dragHandle.addEventListener("pointerup", stopDrag);
+    dragHandle.addEventListener("pointercancel", stopDrag);
+
+    // ── ลากมุมขวาล่างเพื่อปรับขนาดหน้าต่าง ──
+    let resizing = null;
+    resizeHandle.addEventListener("pointerdown", e => {
+      resizing = { startX: e.clientX, startY: e.clientY, w: panel.offsetWidth, h: panel.offsetHeight };
+      resizeHandle.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    resizeHandle.addEventListener("pointermove", e => {
+      if (!resizing) return;
+      panel.style.width = Math.max(260, resizing.w + (e.clientX - resizing.startX)) + "px";
+      panel.style.height = Math.max(240, resizing.h + (e.clientY - resizing.startY)) + "px";
+    });
+    const stopResize = () => {
+      if (resizing) floatingRect = { w: panel.offsetWidth, h: panel.offsetHeight, left: panel.offsetLeft, top: panel.offsetTop };
+      resizing = null;
+    };
+    resizeHandle.addEventListener("pointerup", stopResize);
+    resizeHandle.addEventListener("pointercancel", stopResize);
   }
 
   function field(q){
