@@ -51,9 +51,14 @@
 
 <main>
   <section class="section" style="padding-top:40px">
-    <div class="wrap" style="max-width:680px;margin:0 auto">
-      <a class="backlink" id="backLink" href="learn.html">‹ กลับไปหน้ารายการบทเรียน</a>
-      <div id="box"><p class="muted">กำลังโหลด…</p></div>
+    <div class="wrap" style="max-width:960px;margin:0 auto">
+      <div class="learnlayout">
+        <nav class="subjectnav" id="subjectNav"></nav>
+        <div>
+          <a class="backlink" id="backLink" href="learn.html">‹ กลับไปหน้ารายการบทเรียน</a>
+          <div id="box"><p class="muted">กำลังโหลด…</p></div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -75,6 +80,7 @@
   const subjectSlug = params.get("subject") || "";
 
   document.getElementById("backLink").href = "learn.html" + (subjectSlug ? "?subject=" + encodeURIComponent(subjectSlug) : "");
+  document.getElementById("subjectNav").innerHTML = subjectNavHtml(subjectSlug);
 
   let quizQuestions = [];
   const ans = {};
@@ -92,6 +98,7 @@
     const subjectMeta = SUBJECTS.find(s => s.slug === res.lesson.subject);
     document.title = res.lesson.title + " — ข้อสอบ";
     document.getElementById("backLink").href = "learn.html?subject=" + encodeURIComponent(res.lesson.subject);
+    document.getElementById("subjectNav").innerHTML = subjectNavHtml(res.lesson.subject);
 
     box.innerHTML = `
       <span class="eyebrow">${subjectMeta ? subjectMeta.icon + " " + escHtml(subjectMeta.name) + " › " : ""}${escHtml(res.lesson.strand)}</span>

@@ -38,8 +38,11 @@
   </section>
 
   <section class="section" style="padding-top:10px">
-    <div class="wrap" style="max-width:720px;margin:0 auto">
-      <div id="strandList"><p class="muted">กำลังโหลด…</p></div>
+    <div class="wrap" style="max-width:960px;margin:0 auto">
+      <div class="learnlayout">
+        <nav class="subjectnav" id="subjectNav"></nav>
+        <div id="strandList"><p class="muted">กำลังโหลด…</p></div>
+      </div>
     </div>
   </section>
 </main>
@@ -56,8 +59,11 @@
 
   const user = getSession();
   const params = new URLSearchParams(location.search);
-  const slug = params.get("subject") || "";
+  // ไม่ระบุวิชามา (เช่นกดไอคอน 📖 บน header ตรงๆ) ให้ตั้งต้นที่วิชาแรกที่เปิดอยู่ แล้วสลับวิชาอื่นได้จาก sidebar
+  const slug = params.get("subject") || (visibleSubjects()[0] && visibleSubjects()[0].slug) || "";
   const subject = SUBJECTS.find(s => s.slug === slug);
+
+  document.getElementById("subjectNav").innerHTML = subjectNavHtml(slug);
 
   if (!subject){
     document.getElementById("pageTitle").textContent = "ไม่พบวิชานี้";

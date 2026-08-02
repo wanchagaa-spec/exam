@@ -42,6 +42,15 @@ function visibleSubjects(){
   return (typeof SUBJECTS !== "undefined" ? SUBJECTS : []).filter(s => s.visible !== false);
 }
 
+/** แถบเลือกวิชาสำหรับหน้าเนื้อหาการเรียนรู้ (learn.html/lesson.html) — จอกว้างแสดงเป็น sidebar ซ้าย
+    จอแคบแสดงเป็นแถบเลื่อนแนวนอนแทน (ดู .subjectnav ใน style.css) ใช้ร่วมกัน 2 หน้าเพื่อให้แก้ที่เดียวพอ */
+function subjectNavHtml(activeSlug){
+  return visibleSubjects().map(s => `
+    <a class="subjectnav-item ${s.slug === activeSlug ? "on" : ""}" href="learn.html?subject=${s.slug}">
+      <span class="ic">${s.icon}</span><span class="nm">${escHtml(s.name)}</span>
+    </a>`).join("");
+}
+
 const NOTIF_LABEL = { like: "กดถูกใจโพสต์ของคุณ", comment: "แสดงความคิดเห็นในโพสต์ของคุณ" };
 function avatarHtml(user, size){
   size = size || 34;
@@ -63,6 +72,7 @@ function renderHeader(active){
   const rightHtml = user ? `
       <a class="navicon dupnav ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
       <a class="navicon dupnav ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
+      <a class="navicon ${on("learn.html")}" href="learn.html" title="เนื้อหาการเรียนรู้" aria-label="เนื้อหาการเรียนรู้">📖</a>
       <a class="navicon dupnav ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
       <button class="navicon" id="bellBtn" type="button" title="แจ้งเตือน" aria-label="แจ้งเตือน">
         🔔<span class="badge hidden" id="notifBadge">0</span>
@@ -84,6 +94,7 @@ function renderHeader(active){
     ` : `
       <a class="navicon dupnav ${on("index.html")}" href="index.html" title="หน้าแรก" aria-label="หน้าแรก">🏠</a>
       <a class="navicon dupnav ${on("news.html")}" href="news.html" title="บอร์ดความคิดเห็น" aria-label="บอร์ดความคิดเห็น">📰</a>
+      <a class="navicon ${on("learn.html")}" href="learn.html" title="เนื้อหาการเรียนรู้" aria-label="เนื้อหาการเรียนรู้">📖</a>
       <a class="navicon dupnav ${on("trophy.html")}" href="trophy.html" title="มหาเทพพยายาม" aria-label="มหาเทพพยายาม">🏆</a>
       <a href="login.html" style="display:inline-flex;align-items:center;min-height:40px;padding:0 18px;border-radius:999px;background:#fff;color:var(--accent-ink);font-weight:700;font-size:14.5px">เข้าสู่ระบบ</a>
     `;

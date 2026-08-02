@@ -122,6 +122,24 @@ header.site{position:sticky;top:0;z-index:50;
   .bnitem.on{color:var(--accent)}
 }
 
+/* ── แถบเลือกวิชาสำหรับหน้าเนื้อหาการเรียนรู้ (learn.html/lesson.html) ──
+   จอกว้าง: sidebar ซ้ายแบบ Facebook (sticky ติดตามสกอลล์) · จอแคบ: แถบเลื่อนแนวนอนด้านบนแทน
+   เพราะจอมือถือไม่มีพื้นที่ซ้ายว่างพอ (มีแถบเมนูล่างครองพื้นที่อยู่แล้ว) ── */
+.learnlayout{display:grid;grid-template-columns:230px 1fr;gap:32px;align-items:start}
+.subjectnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:84px}
+.subjectnav-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r);
+  font-weight:600;font-size:14.5px;color:var(--ink)}
+.subjectnav-item:hover{background:var(--card)}
+.subjectnav-item.on{background:rgba(255,111,176,.14);color:var(--accent)}
+.subjectnav-item .ic{font-size:18px;flex:none}
+@media (max-width:900px){
+  .learnlayout{display:block}
+  .subjectnav{position:static;flex-direction:row;overflow-x:auto;gap:8px;padding-bottom:4px;margin-bottom:22px;
+    -webkit-overflow-scrolling:touch}
+  .subjectnav-item{flex:none;white-space:nowrap;background:var(--card);border:1.5px solid var(--line)}
+  .subjectnav-item.on{border-color:var(--accent)}
+}
+
 /* ── หน้าต่างโพสต์ด่วน (เปิดจากปุ่ม + บน header) ─────────────────────── */
 .pmask{position:fixed;inset:0;z-index:70;background:rgba(10,4,20,.6);display:none;place-items:center;padding:20px}
 .pmask:not(.hidden){display:grid}
