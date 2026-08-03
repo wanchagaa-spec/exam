@@ -152,6 +152,22 @@
               <button class="btn s hidden" type="button" id="quizCancelBtn">ยกเลิกแก้ไข</button>
             </div>
           </form>
+
+          <hr style="margin:22px 0;border:none;border-top:1px solid var(--line)">
+          <h3 style="margin-bottom:8px;font-size:15.5px">นำเข้าหลายข้อพร้อมกัน (JSON)</h3>
+          <p class="muted" style="font-size:13px;margin-bottom:10px">
+            วางเป็น JSON array เช่น
+            <code>[{"type":"mc","text":"โจทย์","options":["ก","ข"],"answer":"ก","note":"คำอธิบาย"}]</code>
+            — <code>type</code> เป็น mc/tf/fill, tf/fill ปล่อย <code>options</code> ว่างได้, <code>answer</code> ต้องตรงกับหนึ่งใน options เป๊ะๆ (mc/tf)
+          </p>
+          <div id="quizImportMsg"></div>
+          <div class="field">
+            <textarea id="quizImportJson" rows="8"
+              placeholder='[{"type":"mc","text":"...","options":["...","..."],"answer":"...","note":"..."}]'
+              style="min-height:180px;font-family:monospace;font-size:13.5px"></textarea>
+          </div>
+          <button class="btn s" id="quizImportBtn" type="button">นำเข้าทั้งหมด</button>
+          <div id="quizImportResult" style="margin-top:10px"></div>
         </div>
       </div>
     </div>
@@ -208,6 +224,7 @@
     document.getElementById("quizAddOptionBtn").onclick = () => { addOptionRow(); refreshAnswerOptions(); };
     document.getElementById("quizItemForm").onsubmit = onQuizItemSubmit;
     document.getElementById("quizCancelBtn").onclick = resetQuizItemForm;
+    document.getElementById("quizImportBtn").onclick = onQuizBulkImport;
   }
 
   function refreshStrandSelect(){
@@ -377,6 +394,51 @@
     resetQuizItemForm();
     loadQuizList();
     document.getElementById("quizPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* ── นำเข้าแบบทดสอบท้ายบทหลายข้อจาก JSON — วนเรียก adminSaveLessonQuizItem ทีละข้อ เหมือนแพทเทิร์นใน admin-import.html ── */
+  async function onQuizBulkImport(){
+    const raw = document.getElementById("quizImportJson").value.trim();
+    const out = document.getElementById("quizImportResult");
+    const msg = document.getElementById("quizImportMsg");
+    out.innerHTML = ""; msg.innerHTML = "";
+
+    let items;
+    try {
+      items = JSON.parse(raw);
+      if (!Array.isArray(items)) throw new Error("ข้อมูลต้องเป็น JSON array ([...])");
+    } catch (e) {
+      msg.innerHTML = `<div class="msg bad">อ่าน JSON ไม่ได้: ${escHtml(e.message)}</div>`;
+      return;
+    }
+    if (!items.length){ msg.innerHTML = '<div class="msg bad">ไม่มีข้อมูลให้นำเข้า</div>'; return; }
+    if (!currentQuizLessonId){ msg.innerHTML = '<div class="msg bad">ยังไม่ได้เลือกบทเรียน</div>'; return; }
+
+    const btn = document.getElementById("quizImportBtn");
+    btn.disabled = true;
+    let ok = 0;
+    const fails = [];
+
+    for (let i = 0; i < items.length; i++){
+      btn.textContent = `กำลังนำเข้า… (${i + 1}/${items.length})`;
+      const q = items[i] || {};
+      const res = await apiCall("adminSaveLessonQuizItem", {
+        adminPassword: adminPass(), lessonId: currentQuizLessonId,
+        type: q.type, text: q.text, options: q.options || [], answer: q.answer, note: q.note || ""
+      });
+      if (res.ok) ok++;
+      else fails.push("ข้อที่ " + (i + 1) + ": " + (res.error || "ไม่ทราบสาเหตุ"));
+    }
+
+    btn.disabled = false;
+    btn.textContent = "นำเข้าทั้งหมด";
+    out.innerHTML = `<div class="msg ${fails.length ? "bad" : "ok"}">นำเข้าสำเร็จ ${ok} ข้อ จากทั้งหมด ${items.length} ข้อ` +
+      (fails.length ? ` (ล้มเหลว ${fails.length} ข้อ — แก้ไขแล้วนำเข้าใหม่ได้)` : "") + "</div>" +
+      (fails.length ? '<ul style="margin-top:8px;font-size:13.5px;color:var(--danger);padding-left:20px">' +
+        fails.map(f => `<li>${escHtml(f)}</li>`).join("") + "</ul>" : "");
+
+    if (!fails.length) document.getElementById("quizImportJson").value = "";
+    loadQuizList();
   }
 
   async function loadQuizList(){

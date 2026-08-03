@@ -1,0 +1,10 @@
+<svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg" font-family="'Sarabun',sans-serif">
+  <rect x="10" y="10" width="280" height="200" fill="none" stroke="#333" stroke-width="2"/>
+  <text x="272" y="26" font-size="16" text-anchor="end">U</text>
+  <circle cx="115" cy="110" r="55" fill="#ff6fb0" fill-opacity="0.35"/>
+  <circle cx="185" cy="110" r="55" fill="#ff6fb0" fill-opacity="0.35"/>
+  <circle cx="115" cy="110" r="55" fill="none" stroke="#333" stroke-width="2"/>
+  <circle cx="185" cy="110" r="55" fill="none" stroke="#333" stroke-width="2"/>
+  <text x="75" y="60" font-size="16" text-anchor="middle">A</text>
+  <text x="225" y="60" font-size="16" text-anchor="middle">B</text>
+</svg>
