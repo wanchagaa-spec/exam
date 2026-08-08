@@ -83,8 +83,9 @@
   /* ── กระดาษทด — หน้าต่างลอยลากย้าย/ปรับขนาดได้ หรือแบ่งครึ่งจอกับข้อสอบ วาดด้วยสไตลัส/เมาส์ (นิ้วไว้เลื่อนหน้าแทน)
      เป็นหน้ากระดาษยาว (900×2600px) เลื่อนขึ้นลงได้ ซูมเข้า-ออกได้ ไม่ใช่ส่วนหนึ่งของคำตอบที่ส่งตรวจ ── */
   .scratchfab{position:fixed;right:16px;bottom:118px;z-index:41;width:52px;height:52px;border-radius:50%;
-    background:var(--holo);color:var(--accent-ink);border:none;font-size:22px;box-shadow:0 6px 18px rgba(0,0,0,.28);
-    cursor:pointer;display:flex;align-items:center;justify-content:center}
+    background:transparent;color:var(--accent-ink);border:none;font-size:22px;box-shadow:none;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.72;transition:opacity .15s}
+  .scratchfab:hover{opacity:1}
   .scratchfab:active{transform:scale(.95)}
 
   .scratchpanel{position:fixed;z-index:45;background:#fffef6;border:1.5px solid var(--line);border-radius:var(--r-lg);
