@@ -194,7 +194,7 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 .grid.c2{grid-template-columns:repeat(2,1fr)}
 .grid.c3{grid-template-columns:repeat(3,1fr)}
 @media (max-width:760px){.grid.c2,.grid.c3{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px}
+.card{background:transparent;border:1px solid transparent;border-radius:var(--r-lg);padding:22px}
 .card:hover{background:var(--card-hi)}
 .card h3{font-size:19px;margin-bottom:8px}
 .card p{color:var(--muted);font-size:15px}
@@ -222,14 +222,14 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
 
 /* ── กล่องแคบตรงกลาง (login/contact) ─────────────────────── */
 .narrow{max-width:440px;margin:0 auto}
-.auth-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:30px 26px}
+.auth-card{background:transparent;border:1px solid transparent;border-radius:var(--r-lg);padding:30px 26px}
 .auth-card h1{font-size:24px;margin-bottom:6px}
 .auth-card p.sub{color:var(--muted);margin-bottom:22px;font-size:15px}
 .switch{text-align:center;margin-top:16px;font-size:14.5px;color:var(--muted)}
 .switch a{color:var(--accent);font-weight:700}
 
 /* ── การ์ดโพสต์บอร์ดความคิดเห็น (ใช้ร่วมกัน: news.html, account.html, search.html) ── */
-.post{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;margin-bottom:14px}
+.post{background:transparent;border:1px solid transparent;border-radius:var(--r-lg);padding:20px;margin-bottom:14px}
 .post .head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px}
 .post .who{font-weight:700;display:inline-flex;align-items:center;gap:5px}
 .rank-badge{display:inline-flex;flex:none;line-height:0}
