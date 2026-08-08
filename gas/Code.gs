@@ -661,8 +661,20 @@ function adminDeleteBlueprintConfig(body) {
     keep.push(r);
   }
   if (wasActive) {
+    // เลื่อนชุดที่เหลือของวิชานี้ขึ้นมา active แทน — เลือกชุดแรกตามชื่อ (เรียงแบบเดียวกับที่ adminListBlueprintConfigs แสดง)
+    // แล้วต้องตั้ง active ให้ครบทุกแถว/ทุกส่วนของชุดนั้น ไม่ใช่แค่แถวแรกที่เจอ ไม่งั้นชุดที่เลื่อนขึ้นมาจะเหลือแค่ส่วนเดียว
+    let promoteName = null;
     for (let i = 1; i < keep.length; i++) {
-      if (String(keep[i][0]) === subject) { keep[i] = keep[i].slice(); keep[i][2] = true; break; }
+      if (String(keep[i][0]) !== subject) continue;
+      const nm = String(keep[i][1] || 'ค่าเริ่มต้น');
+      if (promoteName === null || nm.localeCompare(promoteName, 'th') < 0) promoteName = nm;
+    }
+    if (promoteName !== null) {
+      for (let i = 1; i < keep.length; i++) {
+        if (String(keep[i][0]) === subject && String(keep[i][1] || 'ค่าเริ่มต้น') === promoteName) {
+          keep[i] = keep[i].slice(); keep[i][2] = true;
+        }
+      }
     }
   }
 
@@ -705,15 +717,20 @@ function serveExam(subject) {
 
   const picked = [];
   const warnings = [];
+  const usedIds = {}; // กันข้อซ้ำข้ามส่วน — สองส่วนที่สุ่มจากสาระเดียวกัน (หรือคลังรวม) ต้องไม่ได้ข้อเดียวกันซ้ำ
   sections.forEach((sec, i) => {
-    const pool = sec.strand ? bank.filter(q => q.strand === sec.strand) : bank.slice();
+    const pool = (sec.strand ? bank.filter(q => q.strand === sec.strand) : bank.slice())
+      .filter(q => !usedIds[q.id]);
     shuffle_(pool);
     const take = pool.slice(0, Math.min(sec.count, pool.length));
     if (take.length < sec.count) {
       warnings.push('ส่วนที่ ' + (i + 1) + (sec.strand ? ' (' + sec.strand + ')' : '') +
         ' มีข้อสอบในคลังไม่พอ (ต้องการ ' + sec.count + ' มีจริง ' + take.length + ')');
     }
-    take.forEach(q => picked.push(Object.assign({ sectionLabel: 'ส่วนที่ ' + (i + 1) + (sec.strand ? ': ' + sec.strand : '') }, q)));
+    take.forEach(q => {
+      usedIds[q.id] = true;
+      picked.push(Object.assign({ sectionLabel: 'ส่วนที่ ' + (i + 1) + (sec.strand ? ': ' + sec.strand : '') }, q));
+    });
   });
 
   if (!picked.length) return { ok: false, error: 'ยังไม่มีข้อสอบในคลังที่ตรงกับโครงสร้างชุดข้อสอบที่ตั้งไว้' };

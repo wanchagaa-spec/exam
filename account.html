@@ -201,9 +201,10 @@
   }
   async function loadTrophyBanner(results){
     const banner = document.getElementById("trophyBanner");
-    const now = new Date();
-    const thisMonth = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
-    const myCount = results.filter(r => isValidTrophyRound(r) && r.timestamp.slice(0, 7) === thisMonth).length;
+    // ใช้ demoMonthKey() ตัวเดียวกับที่ leaderboard จริงใช้ (ตัดเดือนจากเวลาท้องถิ่น ไม่ใช่ตัด string ISO แบบ UTC ตรงๆ)
+    // ไม่งั้นรอบที่ทำช่วงต้นเดือนตามเวลาไทยจะถูกนับผิดเดือนเทียบกับ leaderboard จริง
+    const thisMonth = demoMonthKey(new Date());
+    const myCount = results.filter(r => isValidTrophyRound(r) && demoMonthKey(r.timestamp) === thisMonth).length;
 
     const lb = await apiCall("trophyLeaderboard", {});
     if (!lb.ok){ banner.classList.add("hidden"); return; }

@@ -134,6 +134,27 @@
     e.target.value = "";
   }
 
+  const LET = ["ก","ข","ค","ง","จ","ฉ"];
+
+  /* ── ตรวจข้อมูลแต่ละข้อก่อนนำเข้า ให้เข้มงวดเท่าฟอร์มเพิ่มทีละข้อ (admin-add.html) กันข้อที่ตอบไม่ได้เล็ดลอดเข้าคลัง ── */
+  function validateBulkItem(q){
+    if (!q || typeof q !== "object") return "ข้อมูลไม่ใช่ object";
+    if (!["mc", "tf", "fill"].includes(q.type)) return 'type ต้องเป็น "mc", "tf" หรือ "fill"';
+    if (!q.text || !String(q.text).trim()) return "ต้องมีโจทย์ (text)";
+    if (!q.strand || !String(q.strand).trim()) return "ต้องระบุสาระ (strand)";
+    if (q.type === "mc"){
+      const opts = Array.isArray(q.options) ? q.options.map(o => String(o).trim()).filter(Boolean) : [];
+      if (opts.length < 2) return "ตัวเลือก (options) ต้องมีอย่างน้อย 2 ข้อ";
+      if (opts.length > LET.length) return "ตัวเลือก (options) ต้องไม่เกิน " + LET.length + " ข้อ";
+      if (!q.answer || !opts.includes(String(q.answer).trim())) return "answer ต้องตรงกับหนึ่งใน options เป๊ะ ๆ";
+    } else if (q.type === "tf"){
+      if (q.answer !== "ถูก" && q.answer !== "ผิด") return 'answer ของ type "tf" ต้องเป็น "ถูก" หรือ "ผิด" เท่านั้น';
+    } else {
+      if (!q.answer || !String(q.answer).trim()) return "ต้องระบุ answer (คำตอบที่ยอมรับ)";
+    }
+    return null;
+  }
+
   /* ── นำเข้าข้อสอบหลายข้อจาก JSON ── */
   async function onBulkImport(){
     const subject = document.getElementById("subjectSel").value;
@@ -160,6 +181,11 @@
     for (let i = 0; i < items.length; i++){
       btn.textContent = `กำลังนำเข้า… (${i + 1}/${items.length})`;
       const q = items[i] || {};
+      const errMsg = validateBulkItem(q);
+      if (errMsg){
+        fails.push("ข้อที่ " + (i + 1) + ": " + errMsg);
+        continue;
+      }
       const res = await apiCall("adminAddQuestion", {
         adminPassword: adminPass(), subject,
         type: q.type, strand: q.strand, text: q.text,

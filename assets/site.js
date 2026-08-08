@@ -1155,7 +1155,9 @@ async function demoApi(action, payload){
     const list = demoLessonsLoad(payload.subject);
     const id = payload.id || ("lsn_" + Date.now().toString(36));
     const idx = list.findIndex(x => x.id === id);
-    let order = idx >= 0 ? list[idx].order : list.filter(x => x.strand === payload.strand).length;
+    // ใช้ order สูงสุด+1 ของสาระนั้น (ไม่ใช่จำนวนบทที่เหลือ) กัน order ชนกันหลังลบบทกลางๆ ออกไปแล้วเพิ่มใหม่
+    let order = idx >= 0 ? list[idx].order
+      : list.filter(x => x.strand === payload.strand).reduce((m, x) => Math.max(m, x.order || 0), -1) + 1;
     const lesson = { id, strand: payload.strand, order, title: payload.title, content: payload.content,
                       visible: payload.visible !== false };
     if (idx >= 0) list[idx] = lesson; else list.push(lesson);
@@ -1240,7 +1242,12 @@ async function demoApi(action, payload){
     let configs = demoBlueprintConfigsLoad(payload.subject);
     const wasActive = configs.some(c => c.name === payload.configName && c.active);
     configs = configs.filter(c => c.name !== payload.configName);
-    if (wasActive && configs.length) configs[0].active = true;
+    // เลือกชุดแรกตามชื่อ (เรียงแบบเดียวกับ adminListBlueprintConfigs) แทนตัวแรกในอาเรย์แบบสุ่มลำดับ
+    if (wasActive && configs.length){
+      let promoted = configs[0];
+      configs.forEach(c => { if (c.name.localeCompare(promoted.name, "th") < 0) promoted = c; });
+      promoted.active = true;
+    }
     demoBlueprintConfigsSave(payload.subject, configs);
     return { ok:true };
   }
