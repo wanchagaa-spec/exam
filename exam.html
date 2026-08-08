@@ -115,22 +115,6 @@
   body.examsplit #app{width:50vw}
   body.examsplit .foot{width:50vw;right:auto}
 
-  /* ── โหมดจดทับหน้าข้อสอบ — อีกทางเลือกนอกจากกระดาษทดแบบหน้าต่างลอย
-     เปิดโหมดแล้วขีดเขียนทับข้อสอบได้ทั้งหน้า (นิ้วยังเลื่อนจอได้ปกติ ปากกา/เมาส์เท่านั้นที่ขีด)
-     ปิดโหมดแล้วรอยขีดยังอยู่ให้เห็น แต่คลิก/แตะทะลุไปกดคำตอบข้างล่างได้ตามปกติ ── */
-  .penfab{position:fixed;right:16px;bottom:180px;z-index:41;width:52px;height:52px;border-radius:50%;
-    background:#fff;color:var(--accent-ink);border:2px solid var(--line);font-size:22px;box-shadow:0 6px 18px rgba(0,0,0,.22);
-    cursor:pointer;display:flex;align-items:center;justify-content:center}
-  .penfab.on{background:var(--holo);border-color:transparent}
-  .penfab:active{transform:scale(.95)}
-  #penCanvas{position:absolute;top:0;left:0;width:100%;z-index:35;pointer-events:none}
-  #penCanvas.active{pointer-events:auto;cursor:crosshair}
-  .pentoolbar{position:fixed;right:16px;z-index:46;display:none;align-items:center;gap:6px;
-    background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:6px 10px;box-shadow:0 8px 22px rgba(0,0,0,.2)}
-  .pentoolbar.show{display:flex}
-  .pentoolbar .swatch{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
-  .pentoolbar .swatch.on{border-color:var(--accent-ink)}
-  .pentoolbar button.scratchbtn{width:28px;height:28px;font-size:13px}
 </style>
 </head>
 <body>
@@ -213,11 +197,13 @@
       if (bank.length && bp.length){
         demoAnswerKey = {};
         questions = [];
+        const usedIds = {}; // กันข้อซ้ำข้ามส่วน — สองส่วนที่สุ่มจากสาระเดียวกันต้องไม่ได้ข้อเดียวกันซ้ำ
         bp.forEach((sec, i) => {
-          const pool = bank.filter(q => q.strand === sec.strand);
+          const pool = bank.filter(q => q.strand === sec.strand && !usedIds[q.id]);
           const chosen = shuffleArr(pool.slice()).slice(0, Math.min(sec.count, pool.length));
           const label = "ส่วนที่ " + (i+1) + (sec.strand ? ": " + sec.strand : "");
           chosen.forEach(q => {
+            usedIds[q.id] = true;
             demoAnswerKey[q.id] = { type: q.type, answer: q.answer, score: q.score || 1, note: q.note || "" };
             questions.push({ id: q.id, type: q.type, text: q.text, options: q.options, section: label });
           });
@@ -310,15 +296,6 @@
         </div>
         <div class="scratchresize" id="scratchResize"></div>
       </div>
-      <button class="penfab" id="penModeToggle" type="button" title="โหมดจดทับหน้าข้อสอบ" aria-label="โหมดจดทับหน้าข้อสอบ">🖊️</button>
-      <canvas id="penCanvas"></canvas>
-      <div class="pentoolbar" id="penToolbar">
-        <button class="swatch on" data-color="#111111" style="background:#111111" title="ปากกาดำ" type="button"></button>
-        <button class="swatch" data-color="#d92d2d" style="background:#d92d2d" title="ปากกาแดง" type="button"></button>
-        <button class="swatch" data-color="#2a63e0" style="background:#2a63e0" title="ปากกาน้ำเงิน" type="button"></button>
-        <button class="scratchbtn" id="penErase" title="ยางลบ" type="button">🧽</button>
-        <button class="scratchbtn" id="penClear" title="ล้างทั้งหมด" type="button">🗑️</button>
-      </div>
     `;
 
     const box = document.getElementById("qs");
@@ -344,7 +321,6 @@
 
     document.getElementById("send").onclick = onSend;
     initScratchpad();
-    initPenMode();
   }
 
   function initScratchpad(){
@@ -464,6 +440,11 @@
     };
 
     // ── ลากย้ายหน้าต่าง (จับที่แถบหัว) — ปิดใช้งานระหว่างแบ่งครึ่งจอเพราะตำแหน่ง/ขนาดถูกล็อกไว้แล้ว ──
+    // กันลากแถบหัวขึ้นไปมุดใต้ header.site (z-index สูงกว่าแผงกระดาษทด) เพราะจะจับแถบหัวเพื่อลากกลับลงมาไม่ได้อีก
+    function minPanelTop(){
+      const header = document.querySelector("header.site");
+      return header ? header.getBoundingClientRect().bottom : 0;
+    }
     let dragOffset = null;
     dragHandle.addEventListener("pointerdown", e => {
       if (splitOn || e.target.closest("button")) return;
@@ -473,7 +454,7 @@
     dragHandle.addEventListener("pointermove", e => {
       if (!dragOffset) return;
       const left = Math.min(Math.max(0, e.clientX - dragOffset.x), window.innerWidth - 60);
-      const top = Math.min(Math.max(0, e.clientY - dragOffset.y), window.innerHeight - 40);
+      const top = Math.min(Math.max(minPanelTop(), e.clientY - dragOffset.y), window.innerHeight - 40);
       panel.style.left = left + "px";
       panel.style.top = top + "px";
     });
@@ -502,95 +483,6 @@
     };
     resizeHandle.addEventListener("pointerup", stopResize);
     resizeHandle.addEventListener("pointercancel", stopResize);
-  }
-
-  /* ── โหมดจดทับหน้าข้อสอบ — แคนวาสใหญ่เท่าความสูงทั้งหน้า เขียนทับข้อสอบได้ตรงจุด
-     ปิดโหมดแล้วรอยขีดยังโชว์อยู่ แต่คลิก/แตะทะลุไปกดคำตอบข้างล่างได้ตามปกติ (pointer-events สลับ) ── */
-  function initPenMode(){
-    const fab = document.getElementById("penModeToggle");
-    const canvas = document.getElementById("penCanvas");
-    const toolbar = document.getElementById("penToolbar");
-    const ctx = canvas.getContext("2d");
-    let color = "#111111", erasing = false, drawing = false, active = false, sized = false;
-
-    function sizeCanvas(){
-      const dpr = window.devicePixelRatio || 1;
-      const h = Math.max(document.getElementById("app").scrollHeight, document.documentElement.scrollHeight);
-      const w = canvas.clientWidth || window.innerWidth;
-      const prev = sized ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      canvas.style.height = h + "px";
-      ctx.lineCap = "round"; ctx.lineJoin = "round";
-      if (prev) ctx.putImageData(prev, 0, 0);
-      sized = true;
-    }
-    function pos(e){
-      const rect = canvas.getBoundingClientRect();
-      return { x: (e.clientX - rect.left) / rect.width * canvas.width, y: (e.clientY - rect.top) / rect.height * canvas.height };
-    }
-
-    canvas.addEventListener("pointerdown", e => {
-      if (e.pointerType === "touch") return; // นิ้วไว้เลื่อนหน้าจอ ปากกา/เมาส์เท่านั้นที่ขีด
-      drawing = true;
-      canvas.setPointerCapture(e.pointerId);
-      const p = pos(e);
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      e.preventDefault();
-    });
-    canvas.addEventListener("pointermove", e => {
-      if (!drawing || e.pointerType === "touch") return;
-      const dpr = window.devicePixelRatio || 1;
-      const p = pos(e);
-      ctx.globalCompositeOperation = erasing ? "destination-out" : "source-over";
-      ctx.lineWidth = (erasing ? 22 : 2.5) * dpr;
-      ctx.strokeStyle = color;
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-    });
-    const stopDraw = () => { drawing = false; };
-    canvas.addEventListener("pointerup", stopDraw);
-    canvas.addEventListener("pointercancel", stopDraw);
-    canvas.addEventListener("pointerleave", stopDraw);
-
-    toolbar.querySelectorAll(".swatch").forEach(btn => {
-      btn.onclick = () => {
-        toolbar.querySelectorAll(".swatch").forEach(b => b.classList.remove("on"));
-        btn.classList.add("on");
-        color = btn.dataset.color;
-        erasing = false;
-        document.getElementById("penErase").classList.remove("on");
-      };
-    });
-    document.getElementById("penErase").onclick = (e) => {
-      erasing = !erasing;
-      e.currentTarget.classList.toggle("on", erasing);
-    };
-    document.getElementById("penClear").onclick = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
-
-    // ตำแหน่งแถบเครื่องมือวัดจากความสูงจริงของ header เหมือนที่ทำกับกระดาษทด/sidebar เพราะโหมดตัวอย่างมีแบนเนอร์แถบบนเพิ่มความสูง header
-    function positionToolbar(){
-      const header = document.querySelector("header.site");
-      toolbar.style.top = (header ? header.getBoundingClientRect().bottom + 10 : 10) + "px";
-    }
-
-    fab.onclick = () => {
-      active = !active;
-      fab.classList.toggle("on", active);
-      canvas.classList.toggle("active", active);
-      toolbar.classList.toggle("show", active);
-      if (active){
-        if (!sized) sizeCanvas();
-        positionToolbar();
-      }
-    };
-    window.addEventListener("resize", () => { if (sized) sizeCanvas(); if (active) positionToolbar(); });
-    window.addEventListener("scroll", () => { if (active) positionToolbar(); }, { passive: true });
-    // เผื่อความสูงหน้าเปลี่ยนหลังรูป/สมการโหลดเสร็จช้ากว่าตอนแรก รีไซส์ซ้ำอีกครั้ง
-    setTimeout(() => { if (sized) sizeCanvas(); }, 1500);
   }
 
   function field(q){

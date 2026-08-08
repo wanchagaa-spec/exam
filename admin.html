@@ -381,14 +381,22 @@
       return;
     }
 
+    const isRename = !!(editingConfigName && editingConfigName !== configName);
+    const wasActiveBeforeRename = isRename && blueprintConfigs.some(c => c.name === editingConfigName && c.active);
+
     const btn = document.getElementById("saveBlueprintBtn");
     btn.disabled = true; btn.textContent = "กำลังบันทึก…";
 
     const res = await apiCall("adminSaveBlueprintConfig", { adminPassword: adminPass(), subject, configName, sections });
 
     // ถ้าเปลี่ยนชื่อชุดที่แก้ไขอยู่ ให้ลบชุดชื่อเดิมทิ้ง (ย้ายเนื้อหาไปชื่อใหม่แล้ว)
-    if (res.ok && editingConfigName && editingConfigName !== configName){
+    if (res.ok && isRename){
       await apiCall("adminDeleteBlueprintConfig", { adminPassword: adminPass(), subject, configName: editingConfigName });
+      // ชุดเดิมเป็นชุด active อยู่ก่อนเปลี่ยนชื่อ — ตั้งชื่อใหม่ให้ active ต่ออย่างชัดเจน
+      // กันไม่ให้ระบบไปเลื่อนชุดอื่นขึ้นมา active แทนโดยไม่ตั้งใจ (การลบชุดเดิมข้างต้นจะเลื่อนชุดอื่นขึ้นมาแทนถ้าชุดเดิม active อยู่)
+      if (wasActiveBeforeRename){
+        await apiCall("adminSetActiveBlueprintConfig", { adminPassword: adminPass(), subject, configName });
+      }
     }
 
     btn.disabled = false; btn.textContent = "บันทึกโครงสร้างชุดนี้";
