@@ -166,6 +166,7 @@ function routeAction_(body) {
     case 'submitLessonQuiz':     return submitLessonQuiz(body);
     case 'adminListLessons':     return adminListLessons(body);
     case 'adminSaveLesson':      return adminSaveLesson(body);
+    case 'uploadLessonPdf':      return uploadLessonPdf(body);
     case 'adminDeleteLesson':    return adminDeleteLesson(body);
     case 'adminReorderLessons':  return adminReorderLessons(body);
     case 'adminListLessonQuiz':  return adminListLessonQuiz(body);
@@ -895,21 +896,21 @@ function trophyHallOfFame(body) {
 }
 
 /* ══════════════════════════ เนื้อหาบทเรียน (Lessons) ══════════════════════════
-   Lessons        : id | subject | strand | order | title | content | visible | updatedAt
-                    ── content เป็นข้อความ + markdown เบา ๆ แบบเดียวกับโจทย์ข้อสอบ (![รูปประกอบ](url) แทรกรูป, $...$ สูตร)
+   Lessons        : id | subject | strand | order | title | pdfUrl | visible | updatedAt
+                    ── เนื้อหาบทเรียนเป็นไฟล์ PDF ที่แอดมินอัปโหลด (เก็บเป็นลิงก์ Drive preview) ไม่ใช่ข้อความอีกต่อไป
                        visible=false = แอดมินร่างไว้ก่อน ยังไม่เปิดให้นักเรียนเห็น (เหมือน SUBJECTS.visible)
    LessonQuiz     : id | lessonId | type | text | options | answer | note
                     ── แบบทดสอบท้ายบท แยกเอกเทศจากคลังข้อสอบหลัก Q_<subject> ไม่ปนกัน ไม่จับเวลา ไม่บันทึกลง Results
    LessonProgress : email | lessonId | completedAt
                     ── มีแถว = ตอบแบบทดสอบท้ายบทนั้นถูกครบทุกข้อแล้วอย่างน้อย 1 ครั้ง (เงื่อนไข "อ่านแล้ว") */
-function lessonsSheet_()        { return sheet_('Lessons', ['id', 'subject', 'strand', 'order', 'title', 'content', 'visible', 'updatedAt']); }
+function lessonsSheet_()        { return sheet_('Lessons', ['id', 'subject', 'strand', 'order', 'title', 'pdfUrl', 'visible', 'updatedAt']); }
 function lessonQuizSheet_()     { return sheet_('LessonQuiz', ['id', 'lessonId', 'type', 'text', 'options', 'answer', 'note']); }
 function lessonProgressSheet_() { return sheet_('LessonProgress', ['email', 'lessonId', 'completedAt']); }
 
 function lessonRowToObj_(r) {
   return {
     id: String(r[0]), subject: String(r[1]), strand: String(r[2]), order: Number(r[3]) || 0,
-    title: String(r[4] || ''), content: String(r[5] || ''),
+    title: String(r[4] || ''), pdfUrl: String(r[5] || ''),
     visible: r[6] !== false && r[6] !== 'FALSE'
   };
 }
@@ -960,7 +961,7 @@ function getLesson(body) {
 
   return {
     ok: true,
-    lesson: { id: lesson.id, subject: lesson.subject, strand: lesson.strand, title: lesson.title, content: lesson.content },
+    lesson: { id: lesson.id, subject: lesson.subject, strand: lesson.strand, title: lesson.title, pdfUrl: lesson.pdfUrl },
     quiz,
     completed: completedLessonIds_(email).has(id)
   };
@@ -1013,9 +1014,9 @@ function adminSaveLesson(body) {
   const subject = String(body.subject || '').slice(0, 50);
   const strand  = clean(body.strand);
   const title   = clean(body.title);
-  const content = cleanLong_(body.content, 20000);
+  const pdfUrl  = clean(body.pdfUrl).slice(0, 500);
   const visible = body.visible !== false;
-  if (!subject || !strand || !title || !content) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+  if (!subject || !strand || !title || !pdfUrl) return { ok: false, error: 'กรอกข้อมูลไม่ครบ (ต้องอัปโหลดไฟล์ PDF ก่อน)' };
 
   const sh = lessonsSheet_();
   const rows = sh.getDataRange().getValues();
@@ -1031,7 +1032,7 @@ function adminSaveLesson(body) {
       .reduce((m, r) => Math.max(m, Number(r[3]) || 0), -1) + 1;
   }
 
-  const rowData = [id, subject, strand, order, title, content, visible, new Date()];
+  const rowData = [id, subject, strand, order, title, pdfUrl, visible, new Date()];
   if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
   else sh.appendRow(rowData);
 
@@ -1181,7 +1182,9 @@ function adminDeleteQuestion(body) {
 /* ══════════════════════════ รูปภาพ (Google Drive) — โจทย์ข้อสอบ + โพสต์บอร์ดความคิดเห็น ══════════════════════════ */
 const IMAGE_FOLDER_NAME      = 'ข้อสอบ - รูปประกอบโจทย์';
 const POST_IMAGE_FOLDER_NAME = 'ข้อสอบ - รูปโพสต์บอร์ดความคิดเห็น';
-const MAX_IMAGE_BASE64_CHARS = 8000000; // ~6MB ไฟล์จริง กันอัปโหลดไฟล์ใหญ่เกินจำเป็น
+const LESSON_PDF_FOLDER_NAME = 'ข้อสอบ - ไฟล์ PDF บทเรียน';
+const MAX_IMAGE_BASE64_CHARS = 8000000;  // ~6MB ไฟล์จริง กันอัปโหลดไฟล์ใหญ่เกินจำเป็น
+const MAX_PDF_BASE64_CHARS   = 14000000; // ~10MB ไฟล์จริง กันคำขอใหญ่จนสคริปต์ Apps Script รันไม่ทัน/ค้าง
 
 /** หาโฟลเดอร์ Drive ตามชื่อ วางไว้ข้าง ๆ ไฟล์ Google Sheet นี้เอง สร้างให้อัตโนมัติถ้ายังไม่มี */
 function driveFolder_(name) {
@@ -1196,6 +1199,7 @@ function driveFolder_(name) {
 }
 function imagesFolder_()     { return driveFolder_(IMAGE_FOLDER_NAME); }
 function postImagesFolder_() { return driveFolder_(POST_IMAGE_FOLDER_NAME); }
+function lessonPdfFolder_()  { return driveFolder_(LESSON_PDF_FOLDER_NAME); }
 
 /** รับรูปเป็น data URL (base64) จากฝั่งเว็บ อัปโหลดขึ้น Drive โฟลเดอร์ที่ระบุ แล้วคืนลิงก์ที่ใช้เป็น <img src> ได้ตรง ๆ */
 function uploadImageToDrive_(folder, dataUrl, filename) {
@@ -1222,9 +1226,39 @@ function uploadImageToDrive_(folder, dataUrl, filename) {
   return { ok: true, url: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1600' };
 }
 
+/** รับไฟล์ PDF เป็น data URL (base64) จากฝั่งเว็บ อัปโหลดขึ้น Drive แล้วคืนลิงก์ embed viewer ของ Drive
+    (ใช้ /preview แทนการดาวน์โหลดตรง ๆ เพราะฝัง <iframe> ได้เลย ไม่ติด CORS แบบดึงไฟล์มา render เอง
+    และตัว viewer ของ Drive มีปุ่มเลื่อนหน้าถัดไป/ก่อนหน้าให้อยู่แล้ว) */
+function uploadPdfToDrive_(folder, dataUrl, filename) {
+  const match = String(dataUrl || '').match(/^data:application\/pdf;base64,(.+)$/);
+  if (!match) return { ok: false, error: 'ไฟล์ไม่ใช่ PDF ที่ถูกต้อง' };
+  if (match[1].length > MAX_PDF_BASE64_CHARS) return { ok: false, error: 'ไฟล์ PDF ใหญ่เกินไป (จำกัดไม่เกิน ~10MB)' };
+
+  const safeName = clean(String(filename || 'lesson')).replace(/[\\/:*?"<>|]/g, '_');
+
+  let bytes;
+  try {
+    bytes = Utilities.base64Decode(match[1]);
+  } catch (err) {
+    return { ok: false, error: 'อ่านไฟล์ PDF ไม่สำเร็จ' };
+  }
+
+  const blob = Utilities.newBlob(bytes, 'application/pdf', safeName);
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  return { ok: true, url: 'https://drive.google.com/file/d/' + file.getId() + '/preview' };
+}
+
 function uploadQuestionImage(body) {
   if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
   return uploadImageToDrive_(imagesFolder_(), body.dataUrl, body.filename);
+}
+
+/** อัปโหลดไฟล์ PDF เนื้อหาบทเรียน — เฉพาะแอดมิน */
+function uploadLessonPdf(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+  return uploadPdfToDrive_(lessonPdfFolder_(), body.dataUrl, body.filename);
 }
 
 /** อัปโหลดรูปแนบโพสต์บอร์ดความคิดเห็น — ผู้ใช้ที่ล็อกอินคนไหนก็โพสต์ได้ (ตามระดับสิทธิ์เดียวกับ createPost) */

@@ -463,6 +463,16 @@ function resizeImageToDataUrlFit(file, maxDim, quality){
   });
 }
 
+/* อ่านไฟล์ทั่วไป (เช่น PDF) เป็น data URL ตรง ๆ ไม่มีการย่อ/แปลงรูปเหมือน resizeImageToDataUrl* */
+function readFileAsDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
 async function sha256(text){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,"0")).join("");
@@ -1113,7 +1123,7 @@ async function demoApi(action, payload){
       .map(q => ({ id:q.id, type:q.type, text:q.text, options:q.options || [] }));
     return {
       ok:true,
-      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title, content: found.content },
+      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title, pdfUrl: found.pdfUrl },
       quiz,
       completed: demoCompletedLessonIds(email).has(found.id)
     };
@@ -1158,7 +1168,7 @@ async function demoApi(action, payload){
     // ใช้ order สูงสุด+1 ของสาระนั้น (ไม่ใช่จำนวนบทที่เหลือ) กัน order ชนกันหลังลบบทกลางๆ ออกไปแล้วเพิ่มใหม่
     let order = idx >= 0 ? list[idx].order
       : list.filter(x => x.strand === payload.strand).reduce((m, x) => Math.max(m, x.order || 0), -1) + 1;
-    const lesson = { id, strand: payload.strand, order, title: payload.title, content: payload.content,
+    const lesson = { id, strand: payload.strand, order, title: payload.title, pdfUrl: payload.pdfUrl,
                       visible: payload.visible !== false };
     if (idx >= 0) list[idx] = lesson; else list.push(lesson);
     demoLessonsSave(payload.subject, list);
@@ -1214,6 +1224,11 @@ async function demoApi(action, payload){
   }
 
   if (action === "uploadQuestionImage"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    return { ok:true, url: payload.dataUrl };
+  }
+
+  if (action === "uploadLessonPdf"){
     if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
     return { ok:true, url: payload.dataUrl };
   }

@@ -13,9 +13,6 @@
 <style>
   .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:20px}
   .toolbar .field{margin-bottom:0;min-width:220px}
-  .imgAttachBox{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);
-    border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
-  .imgAttachBox img{max-width:140px;max-height:100px;border-radius:var(--r);display:block}
   .optrow{display:flex;gap:10px;align-items:center;margin-bottom:9px}
   .optrow .optn{flex:none;width:26px;font-weight:700;color:var(--muted2)}
   .optrow input{flex:1}
@@ -75,18 +72,15 @@
               <input type="text" id="lessonTitleInput" required placeholder="เช่น เลขยกกำลังและกรณฑ์">
             </div>
             <div class="field">
-              <label for="lessonContentInput">เนื้อหา <span class="req">*</span></label>
-              <textarea id="lessonContentInput" rows="10" required
-                placeholder="พิมพ์เนื้อหาตรงนี้ — ใส่สมการแบบ LaTeX คร่อมด้วย $...$ ได้ ใส่รูปด้วยปุ่มแนบรูปด้านล่าง"></textarea>
-            </div>
-            <div class="imgAttachBox">
-              <div style="flex:1;min-width:200px">
-                <div class="muted" style="font-size:13.5px;margin-bottom:8px">แนบรูปประกอบเนื้อหา (ถ้ามี) — อัปโหลดแล้วระบบจะแทรกลงท้ายเนื้อหาให้อัตโนมัติ</div>
-                <div id="imgUploadMsg"></div>
-                <input type="file" id="imgUploadInput" accept="image/*" class="hidden">
-                <button class="btn s" id="imgUploadBtn" type="button">📷 เลือกรูป…</button>
+              <label>ไฟล์เนื้อหา (PDF) <span class="req">*</span></label>
+              <input type="hidden" id="lessonPdfUrlField">
+              <div id="pdfUploadMsg"></div>
+              <div id="pdfUploadedInfo" class="hidden" style="font-size:14px;margin-bottom:8px">
+                📄 อัปโหลดไฟล์แล้ว — <a id="pdfPreviewLink" href="#" target="_blank" rel="noopener">เปิดดูตัวอย่าง</a>
               </div>
-              <img id="imgUploadPreview" class="hidden" alt="">
+              <input type="file" id="pdfUploadInput" accept="application/pdf" class="hidden">
+              <button class="btn s" id="pdfUploadBtn" type="button">📄 เลือกไฟล์ PDF…</button>
+              <p class="muted" style="font-size:13px;margin-top:6px">ไฟล์ไม่เกิน ~10MB — อัปโหลดไฟล์ใหม่เพื่อแทนที่ไฟล์เดิม</p>
             </div>
             <div class="field">
               <label><input type="checkbox" id="lessonVisibleInput" checked> เปิดให้นักเรียนเห็น (ยกเลิกติ๊ก = ร่างไว้ก่อน)</label>
@@ -215,8 +209,8 @@
     refreshStrandSelect();
     loadLessonList();
 
-    document.getElementById("imgUploadBtn").onclick = () => document.getElementById("imgUploadInput").click();
-    document.getElementById("imgUploadInput").onchange = onImageUpload;
+    document.getElementById("pdfUploadBtn").onclick = () => document.getElementById("pdfUploadInput").click();
+    document.getElementById("pdfUploadInput").onchange = onPdfUpload;
     document.getElementById("lessonForm").onsubmit = onLessonSubmit;
     document.getElementById("lessonCancelBtn").onclick = resetLessonForm;
 
@@ -238,13 +232,13 @@
     document.getElementById("lessonFormTitle").textContent = "เพิ่มบทเรียนใหม่";
     document.getElementById("lessonIdField").value = "";
     document.getElementById("lessonTitleInput").value = "";
-    document.getElementById("lessonContentInput").value = "";
+    document.getElementById("lessonPdfUrlField").value = "";
     document.getElementById("lessonVisibleInput").checked = true;
     document.getElementById("lessonSaveBtn").textContent = "เพิ่มบทเรียน";
     document.getElementById("lessonCancelBtn").classList.add("hidden");
     document.getElementById("lessonMsg").innerHTML = "";
-    document.getElementById("imgUploadMsg").innerHTML = "";
-    document.getElementById("imgUploadPreview").classList.add("hidden");
+    document.getElementById("pdfUploadMsg").innerHTML = "";
+    document.getElementById("pdfUploadedInfo").classList.add("hidden");
     refreshStrandSelect();
   }
 
@@ -253,7 +247,14 @@
     document.getElementById("lessonFormTitle").textContent = "แก้ไขบทเรียน";
     document.getElementById("lessonIdField").value = lesson.id;
     document.getElementById("lessonTitleInput").value = lesson.title;
-    document.getElementById("lessonContentInput").value = lesson.content || "";
+    document.getElementById("lessonPdfUrlField").value = lesson.pdfUrl || "";
+    document.getElementById("pdfUploadMsg").innerHTML = "";
+    if (lesson.pdfUrl){
+      document.getElementById("pdfPreviewLink").href = lesson.pdfUrl;
+      document.getElementById("pdfUploadedInfo").classList.remove("hidden");
+    } else {
+      document.getElementById("pdfUploadedInfo").classList.add("hidden");
+    }
     document.getElementById("lessonVisibleInput").checked = lesson.visible !== false;
     document.getElementById("lessonSaveBtn").textContent = "บันทึกการแก้ไข";
     document.getElementById("lessonCancelBtn").classList.remove("hidden");
@@ -262,26 +263,29 @@
     document.getElementById("lessonForm").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  async function onImageUpload(e){
+  async function onPdfUpload(e){
     const file = e.target.files[0];
     if (!file) return;
-    const msg = document.getElementById("imgUploadMsg");
+    const msg = document.getElementById("pdfUploadMsg");
+    if (file.type !== "application/pdf"){
+      msg.innerHTML = '<div class="msg bad">เลือกไฟล์ PDF เท่านั้น</div>';
+      e.target.value = "";
+      return;
+    }
     msg.innerHTML = '<p class="muted" style="font-size:13.5px">กำลังอัปโหลด…</p>';
     try {
-      const dataUrl = await resizeImageToDataUrlFit(file, 1000);
-      const res = await apiCall("uploadQuestionImage", { adminPassword: adminPass(), dataUrl, filename: file.name });
+      const dataUrl = await readFileAsDataUrl(file);
+      const res = await apiCall("uploadLessonPdf", { adminPassword: adminPass(), dataUrl, filename: file.name });
       if (res.ok){
-        const textEl = document.getElementById("lessonContentInput");
-        textEl.value = textEl.value.trimEnd() + `\n\n![รูปประกอบ](${res.url})`;
-        const preview = document.getElementById("imgUploadPreview");
-        preview.src = res.url;
-        preview.classList.remove("hidden");
-        msg.innerHTML = '<div class="msg ok">แนบรูปเข้าท้ายเนื้อหาแล้ว</div>';
+        document.getElementById("lessonPdfUrlField").value = res.url;
+        document.getElementById("pdfPreviewLink").href = res.url;
+        document.getElementById("pdfUploadedInfo").classList.remove("hidden");
+        msg.innerHTML = '<div class="msg ok">อัปโหลดไฟล์แล้ว</div>';
       } else {
         msg.innerHTML = `<div class="msg bad">${escHtml(res.error || "อัปโหลดไม่สำเร็จ")}</div>`;
       }
     } catch (err) {
-      msg.innerHTML = '<div class="msg bad">อ่านไฟล์รูปไม่สำเร็จ ลองใช้รูปอื่น</div>';
+      msg.innerHTML = '<div class="msg bad">อ่านไฟล์ไม่สำเร็จ ลองใช้ไฟล์อื่น</div>';
     }
     e.target.value = "";
   }
@@ -291,13 +295,13 @@
     const msg = document.getElementById("lessonMsg");
     const strand = document.getElementById("lessonStrandSel").value;
     const title = document.getElementById("lessonTitleInput").value.trim();
-    const content = document.getElementById("lessonContentInput").value.trim();
+    const pdfUrl = document.getElementById("lessonPdfUrlField").value.trim();
     const visible = document.getElementById("lessonVisibleInput").checked;
-    if (!strand || !title || !content){ msg.innerHTML = '<div class="msg bad">กรุณากรอกข้อมูลให้ครบ</div>'; return; }
+    if (!strand || !title || !pdfUrl){ msg.innerHTML = '<div class="msg bad">กรุณากรอกข้อมูลให้ครบ (ต้องอัปโหลดไฟล์ PDF ก่อน)</div>'; return; }
 
     const btn = document.getElementById("lessonSaveBtn");
     btn.disabled = true;
-    const payload = { adminPassword: adminPass(), subject: currentSubject, strand, title, content, visible };
+    const payload = { adminPassword: adminPass(), subject: currentSubject, strand, title, pdfUrl, visible };
     if (editingLessonId) payload.id = editingLessonId;
     const res = await apiCall("adminSaveLesson", payload);
     btn.disabled = false;
