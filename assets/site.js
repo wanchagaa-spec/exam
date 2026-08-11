@@ -1123,7 +1123,7 @@ async function demoApi(action, payload){
       .map(q => ({ id:q.id, type:q.type, text:q.text, options:q.options || [] }));
     return {
       ok:true,
-      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title, pdfUrl: found.pdfUrl },
+      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title, pdfUrl: found.pdfUrl, pdfDataUrl: found.pdfUrl },
       quiz,
       completed: demoCompletedLessonIds(email).has(found.id)
     };

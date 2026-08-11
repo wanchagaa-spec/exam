@@ -13,12 +13,16 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <style>
   .lessonpdf{background:#fffdf3;border:1px solid var(--line);border-radius:var(--r-lg);
-    padding:10px;margin-bottom:30px;box-shadow:0 3px 14px rgba(0,0,0,.09)}
-  .lessonpdf iframe{display:block;margin:0 auto;width:min(100%,640px);aspect-ratio:210/297;height:auto;border:none;border-radius:calc(var(--r-lg) - 4px)}
-  .lessonpdf .nopdf{padding:30px 10px;text-align:center;color:var(--muted)}
-  .lessonpdf .pdffallback{padding:8px 6px 2px;text-align:center;font-size:13.5px;color:var(--muted)}
+    padding:20px 14px;margin-bottom:30px;box-shadow:0 3px 14px rgba(0,0,0,.09);text-align:center}
+  .lessonpdf canvas{display:block;margin:0 auto 18px;max-width:100%;height:auto;
+    box-shadow:0 2px 14px rgba(0,0,0,.16);border-radius:2px}
+  .lessonpdf .pdfloading, .lessonpdf .nopdf{padding:60px 10px;text-align:center;color:var(--muted)}
+  .lessonpdf .pdfpager{display:flex;align-items:center;justify-content:center;gap:16px}
+  .lessonpdf .pdfpager span{font-weight:700;color:var(--ink);min-width:64px}
+  .lessonpdf .pdffallback{padding:10px 6px 0;text-align:center;font-size:13.5px;color:var(--muted)}
   .lessonpdf .pdffallback a{color:var(--accent-ink);font-weight:600}
   .backlink{display:inline-block;margin-bottom:16px;font-size:14px;color:var(--muted2);font-weight:600}
   .donebanner{background:rgba(26,154,85,.1);border:1px solid rgba(26,154,85,.35);color:var(--ok);
@@ -107,21 +111,85 @@
     document.getElementById("subjectNav").innerHTML = subjectNavHtml(res.lesson.subject);
     renderSidebar(res.lesson.subject);
 
-    const viewUrl = String(res.lesson.pdfUrl || "").replace(/\/preview$/, "/view");
-    const pdfBody = res.lesson.pdfUrl
-      ? `<iframe src="${escHtml(res.lesson.pdfUrl)}" title="${escHtml(res.lesson.title)}" allowfullscreen></iframe>
-         <div class="pdffallback">เปิดไฟล์ไม่ขึ้น? <a href="${escHtml(viewUrl)}" target="_blank" rel="noopener">เปิดไฟล์ PDF ในแท็บใหม่</a></div>`
-      : '<p class="nopdf">ยังไม่มีไฟล์เนื้อหาสำหรับบทนี้</p>';
-
     box.innerHTML = `
       <span class="eyebrow">${subjectMeta ? subjectMeta.icon + " " + escHtml(subjectMeta.name) + " › " : ""}${escHtml(res.lesson.strand)}</span>
       <h1 style="margin:10px 0 20px">${escHtml(res.lesson.title)}</h1>
       ${res.completed ? '<div class="donebanner">✅ คุณผ่านแบบทดสอบท้ายบทนี้แล้ว — อ่านทบทวนหรือทำแบบทดสอบซ้ำได้ตลอด</div>' : ""}
-      <div class="lessonpdf">${pdfBody}</div>
+      <div class="lessonpdf" id="lessonPdfBox"><p class="pdfloading">กำลังโหลดไฟล์…</p></div>
       <div id="quizArea"></div>
     `;
 
     renderQuiz();
+    loadLessonPdf(res.lesson);
+  }
+
+  let pdfDoc = null, pdfPageNum = 1;
+
+  async function loadLessonPdf(lesson){
+    const pdfBox = document.getElementById("lessonPdfBox");
+    const viewUrl = String(lesson.pdfUrl || "").replace(/\/preview$/, "/view");
+    const fallbackLink = lesson.pdfUrl
+      ? `<div class="pdffallback">เปิดไฟล์ไม่ขึ้น? <a href="${escHtml(viewUrl)}" target="_blank" rel="noopener">เปิดไฟล์ PDF ในแท็บใหม่</a></div>`
+      : "";
+
+    if (!lesson.pdfDataUrl){
+      pdfBox.innerHTML = lesson.pdfUrl
+        ? `<p class="nopdf">โหลดไฟล์ไม่สำเร็จ</p>${fallbackLink}`
+        : '<p class="nopdf">ยังไม่มีไฟล์เนื้อหาสำหรับบทนี้</p>';
+      return;
+    }
+
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+      const base64 = lesson.pdfDataUrl.split(",")[1] || "";
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+      pdfPageNum = 1;
+
+      pdfBox.innerHTML = `
+        <canvas id="pdfCanvas"></canvas>
+        <div class="pdfpager">
+          <button class="btn s" type="button" id="pdfPrevBtn">‹ ก่อนหน้า</button>
+          <span id="pdfPageIndicator"></span>
+          <button class="btn s" type="button" id="pdfNextBtn">ถัดไป ›</button>
+        </div>
+        ${fallbackLink}
+      `;
+      document.getElementById("pdfPrevBtn").onclick = () => goToPdfPage(pdfPageNum - 1);
+      document.getElementById("pdfNextBtn").onclick = () => goToPdfPage(pdfPageNum + 1);
+      await renderPdfPage(pdfPageNum);
+    } catch (err) {
+      pdfBox.innerHTML = `<p class="nopdf">โหลดไฟล์ไม่สำเร็จ</p>${fallbackLink}`;
+    }
+  }
+
+  function goToPdfPage(n){
+    if (n < 1 || n > pdfDoc.numPages) return;
+    pdfPageNum = n;
+    renderPdfPage(n);
+    const pdfBox = document.getElementById("lessonPdfBox");
+    window.scrollTo({ top: pdfBox.offsetTop - 20, behavior: "smooth" });
+  }
+
+  async function renderPdfPage(n){
+    const page = await pdfDoc.getPage(n);
+    const canvas = document.getElementById("pdfCanvas");
+    const pdfBox = document.getElementById("lessonPdfBox");
+    const containerWidth = Math.min(pdfBox.clientWidth - 4, 700);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = containerWidth / baseViewport.width;
+    const viewport = page.getViewport({ scale });
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+
+    document.getElementById("pdfPageIndicator").textContent = n + " / " + pdfDoc.numPages;
+    document.getElementById("pdfPrevBtn").disabled = n <= 1;
+    document.getElementById("pdfNextBtn").disabled = n >= pdfDoc.numPages;
   }
 
   function renderQuiz(){

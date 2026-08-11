@@ -959,12 +959,31 @@ function getLesson(body) {
     .map(r => ({ id: String(r[0]), type: String(r[2]), text: String(r[3] || ''),
                  options: String(r[4] || '').split('|').filter(Boolean) }));
 
+  // ส่งไฟล์ PDF กลับเป็น base64 ผ่าน endpoint ของเราเอง แทนที่จะให้หน้าเว็บดึงจาก Drive ตรงๆ
+  // (ฝั่งเว็บวาดเองด้วย PDF.js ต้องได้ bytes จริง ดึงข้าม origin จาก Drive ตรงๆ ติด CORS)
+  let pdfDataUrl = '';
+  const fileId = driveFileIdFromUrl_(lesson.pdfUrl);
+  if (fileId) {
+    try {
+      const blob = DriveApp.getFileById(fileId).getBlob();
+      pdfDataUrl = 'data:application/pdf;base64,' + Utilities.base64Encode(blob.getBytes());
+    } catch (err) {
+      pdfDataUrl = ''; // โหลดไฟล์ไม่ได้ก็ปล่อยว่าง ฝั่งเว็บจะ fallback ไปโชว์ลิงก์เปิดในแท็บใหม่แทน
+    }
+  }
+
   return {
     ok: true,
-    lesson: { id: lesson.id, subject: lesson.subject, strand: lesson.strand, title: lesson.title, pdfUrl: lesson.pdfUrl },
+    lesson: { id: lesson.id, subject: lesson.subject, strand: lesson.strand, title: lesson.title,
+               pdfUrl: lesson.pdfUrl, pdfDataUrl },
     quiz,
     completed: completedLessonIds_(email).has(id)
   };
+}
+
+function driveFileIdFromUrl_(url) {
+  const m = String(url || '').match(/\/file\/d\/([^/]+)/);
+  return m ? m[1] : '';
 }
 
 /** ตรวจแบบทดสอบท้ายบท — ตอบถูกครบทุกข้อในรอบเดียวถึงจะนับว่า "อ่านแล้ว" (บันทึกลง LessonProgress) ทำซ้ำได้ไม่จำกัดจนกว่าจะผ่าน */
