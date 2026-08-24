@@ -55,7 +55,7 @@
     const res = await apiCall("login", { email, password });
 
     if (res.ok){
-      setSession({ email: res.email || email, name: res.name || email, age: res.age, school: res.school });
+      setSession({ email: res.email || email, name: res.name || email, age: res.age, school: res.school, avatar: res.avatar || "" });
       location.href = params.get("next") || "index.html";
     } else {
       document.getElementById("msg").innerHTML = `<div class="msg bad">${escHtml(res.error || "เข้าสู่ระบบไม่สำเร็จ")}</div>`;

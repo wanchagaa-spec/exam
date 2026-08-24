@@ -83,6 +83,8 @@
   renderFooter();
 
   const LET = ["ก","ข","ค","ง","จ","ฉ"];
+  // ข้อที่มีตัวเลือกเกิน 6 (พิมพ์ในชีตเองได้ ฟอร์มแอดมินจำกัดไว้ 6) ให้ใช้เลขลำดับต่อ ไม่ใช่ undefined
+  const optLabel = i => LET[i] || String(i + 1);
   const user = getSession();
   const params = new URLSearchParams(location.search);
   const lessonId = params.get("id") || "";
@@ -239,7 +241,7 @@
       const lab = document.createElement("label");
       lab.className = "opt";
       lab.innerHTML = '<input type="radio" name="' + q.id + '" value="' + escHtml(o) + '">' +
-        '<span class="mk">' + LET[i] + '</span><span>' + escHtml(o) + '</span>';
+        '<span class="mk">' + optLabel(i) + '</span><span>' + escHtml(o) + '</span>';
       const inp = lab.querySelector("input");
       inp.onchange = () => {
         ans[q.id] = inp.value;
@@ -253,7 +255,8 @@
 
   async function onCheck(){
     const msg = document.getElementById("quizMsg");
-    const missing = quizQuestions.some(q => !ans[q.id]);
+    // เทียบกับ undefined/"" ตรง ๆ ไม่ใช้ !ans[...] เพราะคำตอบที่ถูกต้องอาจเป็น "0" ซึ่งเป็น falsy
+    const missing = quizQuestions.some(q => ans[q.id] === undefined || ans[q.id] === "");
     if (missing){ msg.innerHTML = '<div class="msg bad">กรุณาตอบให้ครบทุกข้อก่อนตรวจ</div>'; return; }
 
     const btn = document.getElementById("checkBtn");

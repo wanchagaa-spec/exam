@@ -158,10 +158,34 @@
   const user = getSession();
   const esc = escHtml;
   const LET = ["ก","ข","ค","ง","จ","ฉ"];
+  // ข้อที่มีตัวเลือกเกิน 6 (พิมพ์ในชีตเองได้ ฟอร์มแอดมินจำกัดไว้ 6) ให้ใช้เลขลำดับต่อ ไม่ใช่ undefined
+  const optLabel = i => LET[i] || String(i + 1);
 
   const FALLBACK_COUNT = 10; // ใช้เมื่อยังไม่ได้ตั้งโครงสร้างชุดข้อสอบเลย
   let questions = [], sessionId = null, left = 0, timer = null, sent = false, demoAnswerKey = null;
+  let deadline = 0; // เวลาจริง (epoch ms) ที่หมดเวลา — เก็บเป็นจุดสิ้นสุด ไม่ใช่ตัวนับถอยหลัง ดู startClock()
   const ans = {};
+
+  /* ── สำเนาสำรองของรอบที่กำลังทำ กันคำตอบหายตอนรีเฟรช/เน็ตหลุด/เผลอปิดแท็บ ──
+     ใช้คีย์ใหม่แยกต่อวิชา ไม่ยุ่งกับคีย์เดิมของระบบ และลบทิ้งทันทีที่ส่งคำตอบสำเร็จ
+     ต้องเก็บตัวโจทย์ไปด้วย เพราะการขอข้อสอบใหม่จากเซิร์ฟเวอร์จะได้ข้อสอบคนละชุด ต่อของเดิมไม่ได้ */
+  const DRAFT_KEY = "examSiteExamDraft_" + subject.slug;
+
+  function saveDraft(){
+    if (sent || !sessionId || !questions.length) return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ sessionId, deadline, questions, ans, demoAnswerKey }));
+    } catch(e){ /* พื้นที่เต็มหรือเบราว์เซอร์โหมดส่วนตัว — ทำข้อสอบต่อได้ตามปกติ แค่ไม่มีสำเนาสำรอง */ }
+  }
+  function clearDraft(){ try { localStorage.removeItem(DRAFT_KEY); } catch(e){} }
+  function loadDraft(){
+    try {
+      const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+      if (!d || !d.sessionId || !Array.isArray(d.questions) || !d.questions.length) return null;
+      if (!d.deadline || d.deadline - Date.now() < 5000){ clearDraft(); return null; } // หมดเวลาไปแล้ว ทำต่อไม่ได้
+      return d;
+    } catch(e){ return null; }
+  }
 
   app.innerHTML = `
     <div class="mid" id="s1">
@@ -176,6 +200,7 @@
         <div class="rule"><b>เกณฑ์ผ่าน</b><span>${PASS_PERCENT}%</span></div>
         <div class="rule"><b>จำนวนครั้ง</b><span>ทำได้หลายครั้งเพื่อฝึกฝน แต่ละครั้งได้ข้อสอบชุดใหม่</span></div>
       </div>
+      <div id="resumeBox"></div>
       <button class="btn p block" id="start" style="margin-top:6px">เริ่มทำแบบทดสอบ</button>
       <p id="n1" class="muted" style="text-align:center;margin-top:10px"></p>
     </div>
@@ -183,6 +208,57 @@
   renderHeader(); renderFooter();
 
   document.getElementById("start").onclick = startExam;
+
+  /* มีรอบที่ทำค้างไว้และยังไม่หมดเวลา — ให้เลือกทำต่อจากเดิม (คำตอบและเวลาที่เหลือคงเดิม) */
+  (function offerResume(){
+    const draft = loadDraft();
+    if (!draft) return;
+    const mins = Math.ceil((draft.deadline - Date.now()) / 60000);
+    const answered = Object.keys(draft.ans || {}).filter(k => draft.ans[k] !== "").length;
+    document.getElementById("resumeBox").innerHTML =
+      '<div class="msg ok" style="margin-bottom:10px">พบข้อสอบที่ทำค้างไว้ · ตอบไปแล้ว ' + answered + '/' + draft.questions.length +
+      ' ข้อ · เหลือเวลาประมาณ ' + mins + ' นาที</div>' +
+      '<button class="btn p block" id="resumeBtn" type="button">ทำต่อจากที่ค้างไว้</button>' +
+      '<p class="muted" style="text-align:center;margin:10px 0 2px;font-size:13.5px">หรือกดปุ่มด้านล่างเพื่อเริ่มข้อสอบชุดใหม่ (ชุดที่ค้างไว้จะหายไป)</p>';
+    document.getElementById("resumeBtn").onclick = () => resumeExam(draft);
+  })();
+
+  function resumeExam(draft){
+    questions = draft.questions;
+    sessionId = draft.sessionId;
+    demoAnswerKey = draft.demoAnswerKey || null;
+    Object.assign(ans, draft.ans || {});
+    buildExamScreen();
+    restoreAnswers();
+    startClock(draft.deadline);
+  }
+
+  /* เติมคำตอบที่เคยตอบไว้กลับลงหน้าจอ (ติ๊กตัวเลือกเดิม/ใส่ข้อความเดิม) หลัง buildExamScreen() แล้วเท่านั้น */
+  function restoreAnswers(){
+    questions.forEach(q => {
+      const v = ans[q.id];
+      if (v === undefined || v === "") return;
+      const card = document.getElementById("c_" + q.id);
+      if (!card) return;
+      const fill = card.querySelector(".fillbox");
+      if (fill){ fill.value = v; return; }
+      card.querySelectorAll(".opt").forEach(lab => {
+        const inp = lab.querySelector("input");
+        if (inp && inp.value === v){ inp.checked = true; lab.classList.add("on"); }
+      });
+    });
+    updateProgress();
+  }
+
+  /* กลับมาที่แท็บนี้เมื่อไหร่ ให้อัปเดตนาฬิกาทันที ไม่ต้องรอ tick ถัดไปที่อาจถูกเบราว์เซอร์หรี่ไว้ */
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && deadline) tickClock(); });
+
+  /* เตือนก่อนออกจากหน้าระหว่างทำข้อสอบ (เบราว์เซอร์แสดงข้อความมาตรฐานของตัวเอง) */
+  window.addEventListener("beforeunload", (e) => {
+    if (!sessionId || sent) return;
+    e.preventDefault();
+    e.returnValue = "";
+  });
 
   (async function loadBlueprintPreview(){
     const { sections, total } = await blueprintSummary(subject.slug);
@@ -198,6 +274,7 @@
   async function startExam(){
     const btn = document.getElementById("start");
     btn.disabled = true; btn.textContent = "กำลังเตรียมข้อสอบ…";
+    clearDraft(); // เริ่มชุดใหม่ = ทิ้งชุดที่ค้างไว้
 
     if (APP.demoMode){
       const bank = demoBankLoad(subject.slug);
@@ -517,7 +594,7 @@
       const lab = document.createElement("label");
       lab.className = "opt";
       lab.innerHTML = '<input type="radio" name="' + q.id + '" value="' + esc(o) + '">' +
-        '<span class="mk">' + LET[i] + '</span><span>' + esc(o) + '</span>';
+        '<span class="mk">' + optLabel(i) + '</span><span>' + esc(o) + '</span>';
       const inp = lab.querySelector("input");
       inp.onchange = () => {
         ans[q.id] = inp.value;
@@ -534,17 +611,24 @@
   const done = q => ans[q.id] !== undefined && ans[q.id] !== "";
   function updateProgress(){
     const n = questions.filter(done).length;
-    document.getElementById("pg").style.width = (n / questions.length * 100) + "%";
+    document.getElementById("pg").style.width = (questions.length ? n / questions.length * 100 : 0) + "%";
+    saveDraft();
   }
 
-  function startClock(){
-    left = subject.minutes * 60;
+  /* คำนวณเวลาที่เหลือจากนาฬิกาจริงทุกครั้ง (deadline - ตอนนี้) ไม่ใช่ลบทีละ 1 ต่อ tick
+     เพราะเบราว์เซอร์หรี่ setInterval ของแท็บที่ไม่ได้อยู่หน้าจอเหลือนาทีละครั้ง
+     ถ้านับ tick นักเรียนที่สลับไปแอปอื่นจะได้เวลาเกินจริงไปมาก */
+  function startClock(existingDeadline){
+    deadline = existingDeadline || (Date.now() + subject.minutes * 60000);
+    saveDraft(); // เก็บสำเนาทันทีที่รู้เวลาหมดอายุ เผื่อรีเฟรชก่อนตอบข้อแรก
+    tickClock();
+    if (!timer) timer = setInterval(tickClock, 1000);
+  }
+  function tickClock(){
+    if (sent) return;
+    left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
     showClock();
-    timer = setInterval(() => {
-      left--;
-      showClock();
-      if (left <= 0){ clearInterval(timer); submit(true); }
-    }, 1000);
+    if (left <= 0){ clearInterval(timer); timer = null; submit(true); }
   }
   function showClock(){
     const m = Math.floor(left/60), s = left % 60;
@@ -644,13 +728,14 @@
       sent = false;
       btn.disabled = false;
       btn.textContent = "ลองส่งอีกครั้ง";
-      if (subject.minutes && left > 0) timer = setInterval(() => { left--; showClock(); if (left<=0){clearInterval(timer); submit(true);} }, 1000);
+      if (left > 0 && !timer) timer = setInterval(tickClock, 1000); // นับต่อจาก deadline เดิม เวลาที่เสียไประหว่างลองส่งไม่ถูกคืนให้
       document.getElementById("note").className = "bad";
       document.getElementById("note").textContent = "ส่งไม่สำเร็จ ตรวจสัญญาณอินเทอร์เน็ตแล้วกดส่งใหม่";
     }
   }
 
   function render(res){
+    clearDraft(); // ส่งคำตอบสำเร็จแล้ว ไม่ต้องเก็บสำเนาไว้อีก
     const pct = res.percent, pass = res.passed;
     const col = pass ? "var(--ok)" : "var(--danger)";
     const dash = 2 * Math.PI * 64;
