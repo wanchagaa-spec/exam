@@ -183,7 +183,7 @@ function renderHeader(active){
   if (!user) return;
 
   const lo = document.getElementById("logoutLink");
-  lo.onclick = (e) => { e.preventDefault(); clearSession(); location.href = "index.html"; };
+  lo.onclick = async (e) => { e.preventDefault(); await clearSession(); location.href = "index.html"; };
 
   const userBtn = document.getElementById("userBtn");
   const userDropdown = document.getElementById("userDropdown");
@@ -369,7 +369,19 @@ function getSession(){
   try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch(e){ return null; }
 }
 function setSession(u){ localStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
-function clearSession(){ localStorage.removeItem(SESSION_KEY); }
+
+/** ล้างเฉพาะฝั่งเครื่องนี้ (ใช้ตอนเซสชันหมดอายุแล้ว ไม่มีอะไรให้เพิกถอนที่เซิร์ฟเวอร์อีก) */
+function clearSessionLocal(){ localStorage.removeItem(SESSION_KEY); }
+
+/** ออกจากระบบ — บอกเซิร์ฟเวอร์ให้ลบเซสชันทิ้งด้วย ไม่งั้น token เดิมยังใช้ได้จนกว่าจะหมดอายุเอง
+    ไม่รอผลลัพธ์นานเกินจำเป็น: ถึงเน็ตล่มก็ต้องออกจากระบบฝั่งเครื่องนี้ให้ได้อยู่ดี */
+async function clearSession(){
+  const session = getSession();
+  if (session && session.token){
+    try { await apiCall("logout", {}); } catch(e){ /* ออกจากระบบฝั่งเครื่องต่อได้เลย */ }
+  }
+  clearSessionLocal();
+}
 
 function requireLogin(){
   if (!getSession()){
@@ -1015,17 +1027,34 @@ function createPostBoard(options){
   return { render };
 }
 
+/* เซสชันหมดอายุ/ถูกเพิกถอน — ล้างของเก่าทิ้งแล้วพากลับไปล็อกอิน พร้อมจำหน้าที่ค้างไว้
+   รวมไว้ที่เดียวใน apiCall ทุกหน้าจึงได้พฤติกรรมเดียวกันโดยไม่ต้องเขียนซ้ำ */
+let __sessionExpiredHandled = false;
+function handleSessionExpired(){
+  if (__sessionExpiredHandled) return;   // หลายคำขอพร้อมกันอาจตอบกลับมาพร้อมกัน เด้งครั้งเดียวพอ
+  __sessionExpiredHandled = true;
+  clearSessionLocal();
+  const back = location.pathname.split("/").pop() + location.search;
+  alert("เซสชันหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง");
+  location.href = "login.html?next=" + encodeURIComponent(back);
+}
+
 async function apiCall(action, payload){
   if (APP.demoMode){
     return demoApi(action, payload);
   }
+  // แนบ sessionToken ให้อัตโนมัติ — เซิร์ฟเวอร์ใช้ค่านี้ตัดสินว่าใครเป็นคนขอ ไม่ใช่อีเมลใน payload
+  const session = getSession();
+  const auth = session && session.token ? { sessionToken: session.token } : {};
   try {
     const r = await fetch(APP.endpoint, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(Object.assign({ token: APP.token, action }, payload))
+      body: JSON.stringify(Object.assign({ token: APP.token, action }, auth, payload))
     });
-    return await r.json();
+    const res = await r.json();
+    if (res && res.sessionExpired) handleSessionExpired();
+    return res;
   } catch (err) {
     return { ok:false, error:"เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตหรือ endpoint แล้วลองใหม่" };
   }
@@ -1042,7 +1071,7 @@ async function demoApi(action, payload){
       return { ok:false, error:"มีอีเมลนี้สมัครไว้แล้ว" };
     users.push({ email, name: payload.name, age: payload.age, school: payload.school, passHash: await sha256(payload.password), avatar: "" });
     demoSaveUsers(users);
-    return { ok:true, email, name: payload.name, age: payload.age, school: payload.school, avatar: "" };
+    return { ok:true, email, name: payload.name, age: payload.age, school: payload.school, avatar: "", sessionToken: "demo-session" };
   }
 
   if (action === "login"){
@@ -1050,7 +1079,7 @@ async function demoApi(action, payload){
     const u = users.find(x => x.email === email);
     if (!u || u.passHash !== await sha256(payload.password))
       return { ok:false, error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง" };
-    return { ok:true, email: u.email, name: u.name, age: u.age, school: u.school, avatar: u.avatar || "" };
+    return { ok:true, email: u.email, name: u.name, age: u.age, school: u.school, avatar: u.avatar || "", sessionToken: "demo-session" };
   }
 
   if (action === "updateAvatar"){
@@ -1061,6 +1090,8 @@ async function demoApi(action, payload){
     demoSaveUsers(users);
     return { ok:true, avatar: users[idx].avatar };
   }
+
+  if (action === "logout") return { ok:true };
 
   if (action === "contact") return { ok:true };
 

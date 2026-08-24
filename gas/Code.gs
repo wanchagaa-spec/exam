@@ -20,6 +20,10 @@
  * โครงสร้างชีตที่ต้องมี (สร้างเองใน Google Sheet เดียวกัน):
  *   Users      : timestamp | email | name | age | school | passHash | avatar
  *               ── ล็อกอินด้วยอีเมล (ไม่มี username แล้ว), avatar = data URL รูปย่อขนาดแล้วจากฝั่งเว็บ (เก็บตรงในเซลล์)
+ *   Sessions   : token | email | createdAt | expiresAt
+ *               ── เซสชันของคนที่ล็อกอินอยู่ สร้างอัตโนมัติตอนล็อกอิน/สมัคร (อายุ 30 วัน)
+ *                  ทุก action ที่ผูกกับตัวบุคคลใช้ token นี้ระบุตัวตน ไม่เชื่ออีเมลที่หน้าเว็บส่งมา
+ *                  แถวที่หมดอายุถูกล้างทิ้งอัตโนมัติตอนมีคนล็อกอินครั้งถัดไป ไม่ต้องดูแลเอง
  *   Contact    : timestamp | name | email | message
  *   Posts      : id | timestamp | email | name | subject | text | likeCount | commentCount
  *               ── โพสของบอร์ดความคิดเห็น (แสดงในหน้า news.html) subject ต้องตรงกับ slug ใน assets/demo-data.js
@@ -124,7 +128,8 @@ function doGet(e) {
 /* action ที่แค่อ่านข้อมูล ไม่แก้ไขอะไร — ข้ามการล็อกได้ ไม่ต้องรอคิวหลังไมค์การเขียนของคนอื่น
    (ช่วยให้การโหลดบอร์ด/รายการต่าง ๆ เร็วขึ้น โดยเฉพาะเวลามีคนใช้งานพร้อมกันหลายคน) */
 const READ_ONLY_ACTIONS = new Set([
-  'login', 'blueprint', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
+  // 'login' ไม่อยู่ในนี้แล้ว เพราะตอนนี้ล็อกอินสำเร็จจะเขียนแถวเซสชันใหม่ลงชีต Sessions ด้วย
+  'blueprint', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
   'trophyLeaderboard', 'trophyAllTime', 'trophyHallOfFame',
   'listLessons', 'getLesson',
   'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs', 'adminListLessons', 'adminListLessonQuiz'
@@ -152,10 +157,27 @@ function doPost(e) {
   }
 }
 
+/* action ที่ต้องรู้ว่า "ใครเป็นคนทำ" — ตัวตนมาจาก sessionToken เท่านั้น ค่า email ที่หน้าเว็บส่งมาจะถูกมองข้าม
+   (listPosts/listComments ไม่อยู่ในนี้ เพราะเป็นข้อมูลสาธารณะ ใช้อีเมลแค่กรอง/เช็คว่ากดถูกใจไปหรือยัง) */
+const USER_ACTIONS = new Set([
+  'updateAvatar', 'submitExam', 'listMyResults',
+  'createPost', 'uploadPostImage', 'deletePost', 'toggleLike',
+  'addComment', 'deleteComment', 'listNotifications', 'markNotificationsRead',
+  'submitLessonQuiz'
+]);
+
 function routeAction_(body) {
+  if (USER_ACTIONS.has(body.action)) {
+    const email = sessionEmail_(body);
+    // sessionExpired: ให้หน้าเว็บรู้ว่าต้องพากลับไปล็อกอินใหม่ ไม่ใช่แค่ขึ้นข้อความ error เฉย ๆ
+    if (!email) return { ok: false, error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้ง', sessionExpired: true };
+    body.__email = email; // ตัวตนที่เซิร์ฟเวอร์ยืนยันแล้ว ทุก handler ใต้บรรทัดนี้ต้องใช้ค่านี้เท่านั้น
+  }
+
   switch (body.action) {
     case 'register':            return register(body);
     case 'login':                return login(body);
+    case 'logout':               return logout(body);
     case 'blueprint':            return { ok: true, sections: getBlueprint_(body.subject) };
     case 'updateAvatar':         return updateAvatar(body);
     case 'contact':              return contact(body);
@@ -198,6 +220,97 @@ function routeAction_(body) {
   }
 }
 
+/* ══════════════════════════ เซสชันผู้ใช้ (ตัวตนที่เซิร์ฟเวอร์เป็นคนตัดสิน) ══════════════════════════
+   เดิมทุก action ที่ผูกกับตัวบุคคลเชื่ออีเมลที่หน้าเว็บส่งมาตรง ๆ ซึ่งใครก็ปลอมได้
+   (token ของเว็บเปิดเผยอยู่แล้วใน assets/site.js เพราะหน้าเว็บต้องพกไปด้วยทุกคำขอ)
+   ตอนนี้ล็อกอินสำเร็จแล้วเซิร์ฟเวอร์จะออก sessionToken สุ่มให้ เก็บไว้ในชีต Sessions
+   แล้วทุกคำขอที่ต้องรู้ว่า "ใครทำ" จะแปลง token → อีเมล ที่ฝั่งเซิร์ฟเวอร์เท่านั้น */
+const SESSION_DAYS = 30;              // อายุเซสชันก่อนต้องล็อกอินใหม่
+const SESSION_CACHE_SECONDS = 21600;  // แคช token→อีเมล 6 ชม. กันต้องอ่านชีตทุกคำขอ
+
+function sessionsSheet_() { return sheet_('Sessions', ['token', 'email', 'createdAt', 'expiresAt']); }
+
+/** ออกเซสชันใหม่ให้อีเมลนี้ พร้อมล้างเซสชันที่หมดอายุแล้วทิ้งไปในคราวเดียว
+    (เขียนกลับทั้งตารางทีเดียว ไม่ลบทีละแถว เพราะ deleteRow ทีละแถวช้ามากเมื่อสะสมเยอะ) */
+function createSession_(email) {
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_DAYS * 86400000);
+
+  const sh = sessionsSheet_();
+  const rows = sh.getDataRange().getValues();
+  const keep = [['token', 'email', 'createdAt', 'expiresAt']];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+    const exp = r[3] instanceof Date ? r[3] : new Date(r[3]);
+    if (exp > now) keep.push(r.slice(0, 4)); // ตัดให้เหลือ 4 คอลัมน์เสมอ กันชีตที่มีคอลัมน์เกินมาทำ setValues พัง
+  }
+  keep.push([token, email, now, expiresAt]);
+
+  sh.clearContents();
+  sh.getRange(1, 1, keep.length, 4).setValues(keep);
+  sh.setFrozenRows(1);
+
+  CacheService.getScriptCache().put('sess_' + token, email, SESSION_CACHE_SECONDS);
+  return token;
+}
+
+/** เหมือน sessionEmail_ แต่ใช้กับ action ที่ไม่ได้บังคับล็อกอิน (ไม่มีเซสชันก็ยังตอบได้ แค่ไม่มีสถานะส่วนตัวติดไปด้วย) */
+function optionalSessionEmail_(body) { return sessionEmail_(body); }
+
+/** แปลง sessionToken ในคำขอเป็นอีเมลของเจ้าของ — คืนสตริงว่างถ้าไม่มี/ปลอม/หมดอายุ */
+function sessionEmail_(body) {
+  const token = String((body && body.sessionToken) || '').trim();
+  if (!token) return '';
+
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('sess_' + token);
+  if (cached) return cached;
+
+  const rows = sessionsSheet_().getDataRange().getValues();
+  const now = new Date();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== token) continue;
+    const exp = rows[i][3] instanceof Date ? rows[i][3] : new Date(rows[i][3]);
+    if (exp <= now) return '';
+    const email = String(rows[i][1] || '').toLowerCase();
+    cache.put('sess_' + token, email, SESSION_CACHE_SECONDS);
+    return email;
+  }
+  return '';
+}
+
+/** ชื่อที่แสดงของผู้ใช้ — อ่านจากชีต Users ไม่ใช่จากค่าที่หน้าเว็บส่งมา
+    ไม่งั้นใครก็โพสต์/คอมเมนต์โดยใส่ชื่อคนอื่นได้ (ชื่อคือสิ่งที่คนอื่นเห็น ส่วนอีเมลไม่ได้แสดง) */
+function displayNameFor_(email) {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('name_' + email);
+  if (hit) return hit;
+
+  const rows = usersSheet_().getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).toLowerCase() === email) {
+      const name = String(rows[i][2] || '') || email;
+      cache.put('name_' + email, name, SESSION_CACHE_SECONDS);
+      return name;
+    }
+  }
+  return email;
+}
+
+function logout(body) {
+  const token = String(body.sessionToken || '').trim();
+  if (!token) return { ok: true };
+  CacheService.getScriptCache().remove('sess_' + token);
+  const sh = sessionsSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === token) { sh.deleteRow(i + 1); break; }
+  }
+  return { ok: true };
+}
+
 /* ══════════════════════════ สมาชิก (ล็อกอินด้วยอีเมล) ══════════════════════════ */
 /** ⚠ PASSWORD_PEPPER คือค่าที่ผสมตอนแฮชรหัสผ่าน เปลี่ยนเมื่อไหร่ = สมาชิกทุกคนล็อกอินไม่ได้ทันที
     ค่าเริ่มต้นคือ DEFAULT_TOKEN เพื่อให้รหัสผ่านที่แฮชไว้ก่อนหน้านี้ยังใช้ได้เหมือนเดิม ถึงแม้จะเปลี่ยน TOKEN ใหม่ก็ตาม
@@ -230,7 +343,7 @@ function register(body) {
     if (String(rows[i][1]).toLowerCase() === email) return { ok: false, error: 'มีอีเมลนี้สมัครไว้แล้ว' };
   }
   sh.appendRow([new Date(), email, name, age, school, hashPass_(email, password), '']);
-  return { ok: true, email, name, age, school, avatar: '' };
+  return { ok: true, email, name, age, school, avatar: '', sessionToken: createSession_(email) };
 }
 
 function login(body) {
@@ -241,7 +354,8 @@ function login(body) {
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).toLowerCase() === email) {
       if (rows[i][5] === hashPass_(email, password)) {
-        return { ok: true, email, name: rows[i][2], age: rows[i][3], school: rows[i][4], avatar: rows[i][6] || '' };
+        return { ok: true, email, name: rows[i][2], age: rows[i][3], school: rows[i][4], avatar: rows[i][6] || '',
+                 sessionToken: createSession_(email) };
       }
       return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
     }
@@ -255,9 +369,8 @@ const AVATAR_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0
 
 /** อัปเดตรูปโปรไฟล์ (data URL ที่ย่อขนาดแล้วจากฝั่งเว็บ) — เก็บตรง ๆ ในเซลล์ชีต ไม่มีระบบเก็บไฟล์แยก */
 function updateAvatar(body) {
-  const email  = String(body.email || '').trim().toLowerCase();
+  const email  = body.__email; // จาก sessionToken เท่านั้น เปลี่ยนรูปของคนอื่นไม่ได้
   const avatar = String(body.avatar || '');
-  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
   if (avatar.length > 45000) return { ok: false, error: 'ไฟล์รูปใหญ่เกินไป' };
   if (avatar && !AVATAR_DATA_URL_RE.test(avatar)) return { ok: false, error: 'ไฟล์รูปโปรไฟล์ไม่ถูกต้อง' };
 
@@ -305,12 +418,12 @@ function likesSheet_()    { return sheet_('Likes', ['postId', 'email']); }
 function commentsSheet_() { return sheet_('Comments', ['id', 'postId', 'timestamp', 'email', 'name', 'text']); }
 
 function createPost(body) {
-  const email   = clean(String(body.email || '').trim().toLowerCase());
-  const name    = clean(String(body.name || '').trim());
+  const email   = clean(body.__email);
+  const name    = clean(displayNameFor_(body.__email)); // ชื่อที่แสดงมาจากชีต Users ไม่ใช่จากหน้าเว็บ
   const subject = clean(String(body.subject || '').trim());
   const text    = clean(String(body.text || '').trim());
   const image   = String(body.image || '').trim();
-  if (!email || !name || !subject || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+  if (!subject || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
 
   const id = 'p_' + Utilities.getUuid().slice(0, 10);
   const timestamp = new Date();
@@ -378,8 +491,8 @@ function bumpCommentCount_(found, delta) {
 /** ลบโพสต์ (เจ้าของเท่านั้น) พร้อมล้างคอมเมนต์/ถูกใจของโพสต์นั้นทิ้งด้วย */
 function deletePost(body) {
   const postId = String(body.postId || '').trim();
-  const email  = String(body.email || '').trim().toLowerCase();
-  if (!postId || !email) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+  const email  = body.__email;
+  if (!postId) return { ok: false, error: 'ข้อมูลไม่ครบ' };
 
   const postSh = postsSheet_();
   const postRows = postSh.getDataRange().getValues();
@@ -409,8 +522,8 @@ function deletePost(body) {
 /** ลบคอมเมนต์ (เจ้าของคอมเมนต์เท่านั้น ไม่ว่าจะไปคอมเมนต์ที่โพสต์ใคร) */
 function deleteComment(body) {
   const commentId = String(body.commentId || '').trim();
-  const email     = String(body.email || '').trim().toLowerCase();
-  if (!commentId || !email) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+  const email     = body.__email;
+  if (!commentId) return { ok: false, error: 'ข้อมูลไม่ครบ' };
 
   const sh = commentsSheet_();
   const rows = sh.getDataRange().getValues();
@@ -429,8 +542,8 @@ function deleteComment(body) {
 
 function toggleLike(body) {
   const postId = String(body.postId || '').trim();
-  const email  = String(body.email || '').trim().toLowerCase();
-  if (!postId || !email) return { ok: false, error: 'ข้อมูลไม่ครบ' };
+  const email  = body.__email;
+  if (!postId) return { ok: false, error: 'ข้อมูลไม่ครบ' };
 
   const likeSh = likesSheet_();
   const likeRows = likeSh.getDataRange().getValues();
@@ -454,7 +567,7 @@ function toggleLike(body) {
     liked = true;
     newCount = currentCount + 1;
     if (postOwnerEmail && postOwnerEmail !== email) {
-      notify_(postOwnerEmail, 'like', postId, body.name || email);
+      notify_(postOwnerEmail, 'like', postId, displayNameFor_(email));
     }
   }
   found.sheet.getRange(found.rowIndex, 7).setValue(newCount);
@@ -464,10 +577,10 @@ function toggleLike(body) {
 
 function addComment(body) {
   const postId = String(body.postId || '').trim();
-  const email  = clean(String(body.email || '').trim().toLowerCase());
-  const name   = clean(String(body.name || '').trim());
+  const email  = clean(body.__email);
+  const name   = clean(displayNameFor_(body.__email));
   const text   = clean(String(body.text || '').trim());
-  if (!postId || !email || !name || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
+  if (!postId || !text) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
 
   const id = 'c_' + Utilities.getUuid().slice(0, 10);
   const timestamp = new Date();
@@ -514,8 +627,7 @@ function notify_(recipientEmail, type, postId, actorName) {
 }
 
 function listNotifications(body) {
-  const email = String(body.email || '').trim().toLowerCase();
-  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+  const email = body.__email;
 
   const rows = notificationsSheet_().getDataRange().getValues();
   const list = [];
@@ -539,8 +651,7 @@ function listNotifications(body) {
 }
 
 function markNotificationsRead(body) {
-  const email = String(body.email || '').trim().toLowerCase();
-  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+  const email = body.__email;
 
   const sh = notificationsSheet_();
   const rows = sh.getDataRange().getValues();
@@ -808,8 +919,9 @@ function submitExam(body) {
 
   const key = session.key;
   const ansIn = body.answers || {};
-  const id = body.identity || {};
   const meta = body.meta || {};
+  const email = body.__email;               // ตัวตนจาก sessionToken ไม่ใช่ body.identity ที่หน้าเว็บส่งมา
+  const name = displayNameFor_(email);
 
   /* เวลาที่ใช้ = เวลาปัจจุบัน − เวลาที่เซิร์ฟเวอร์แจกข้อสอบ ไม่รับค่าจากหน้าเว็บอีกต่อไป
      เซสชันเก่าที่แจกไปก่อนอัปเดตนี้จะไม่มี startedAt — ยอมรับค่าจากหน้าเว็บไปก่อนเฉพาะกรณีนั้น
@@ -837,7 +949,7 @@ function submitExam(body) {
   const passed = percent >= 60;
 
   sheet_('Results', ['timestamp', 'subject', 'email', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
-    .appendRow([new Date(), body.subject, clean(id.email), clean(id.name), score, total, percent,
+    .appendRow([new Date(), body.subject, clean(email), clean(name), score, total, percent,
                 passed ? 'ผ่าน' : 'ไม่ผ่าน', usedSeconds, autoSubmitted ? 'ใช่' : '']);
 
   CacheService.getScriptCache().remove(body.sessionId);
@@ -847,8 +959,7 @@ function submitExam(body) {
 
 /** ประวัติการทำข้อสอบของผู้ใช้คนเดียว (หน้าโปรไฟล์) — กรองชีต Results ตามอีเมล เรียงล่าสุดก่อน */
 function listMyResults(body) {
-  const email = String(body.email || '').trim().toLowerCase();
-  if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
+  const email = body.__email; // ดูได้เฉพาะประวัติของตัวเอง
 
   const rows = sheet_('Results', ['timestamp', 'subject', 'email', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
     .getDataRange().getValues();
@@ -1004,7 +1115,7 @@ function completedLessonIds_(email) {
 /** รายการบทเรียนของวิชา (เฉพาะที่เปิดให้เห็น) พร้อมสถานะอ่านผ่านแล้วหรือยัง — หน้า learn.html ใช้จัดกลุ่มตามสาระเอง */
 function listLessons(body) {
   const subject = String(body.subject || '').slice(0, 50);
-  const email = String(body.email || '').trim().toLowerCase();
+  const email = optionalSessionEmail_(body); // สถานะ "อ่านแล้ว" ของคนที่ล็อกอินอยู่เท่านั้น
   const done = completedLessonIds_(email);
   const lessons = allLessons_(subject).filter(l => l.visible)
     .sort((a, b) => a.order - b.order)
@@ -1015,7 +1126,7 @@ function listLessons(body) {
 /** เนื้อหาบทเดียว + แบบทดสอบท้ายบท (ไม่ส่งเฉลยไปด้วย เหมือน serveExam) — ต้องล็อกอินก่อนถึงจะเรียกหน้านี้ได้ (เช็คฝั่งเว็บ) */
 function getLesson(body) {
   const id = String(body.id || '').trim();
-  const email = String(body.email || '').trim().toLowerCase();
+  const email = optionalSessionEmail_(body);
 
   const rows = lessonsSheet_().getDataRange().getValues();
   let row = null;
@@ -1060,8 +1171,7 @@ function driveFileIdFromUrl_(url) {
 /** ตรวจแบบทดสอบท้ายบท — ตอบถูกครบทุกข้อในรอบเดียวถึงจะนับว่า "อ่านแล้ว" (บันทึกลง LessonProgress) ทำซ้ำได้ไม่จำกัดจนกว่าจะผ่าน */
 function submitLessonQuiz(body) {
   const lessonId = String(body.lessonId || '').trim();
-  const email = String(body.email || '').trim().toLowerCase();
-  if (!email) return { ok: false, error: 'กรุณาเข้าสู่ระบบก่อน' };
+  const email = body.__email; // บันทึก "อ่านแล้ว" ให้เจ้าของเซสชันเท่านั้น ติ๊กให้บัญชีคนอื่นไม่ได้
 
   const quizRows = lessonQuizSheet_().getDataRange().getValues().slice(1).filter(r => String(r[1]) === lessonId);
   if (!quizRows.length) return { ok: false, error: 'บทนี้ยังไม่มีแบบทดสอบท้ายบท' };
@@ -1359,8 +1469,6 @@ function uploadLessonPdf(body) {
 
 /** อัปโหลดรูปแนบโพสต์บอร์ดความคิดเห็น — ผู้ใช้ที่ล็อกอินคนไหนก็โพสต์ได้ (ตามระดับสิทธิ์เดียวกับ createPost) */
 function uploadPostImage(body) {
-  const email = String(body.email || '').trim().toLowerCase();
-  if (!email) return { ok: false, error: 'unauthorized' };
   return uploadImageToDrive_(postImagesFolder_(), body.dataUrl, body.filename);
 }
 

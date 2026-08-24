@@ -710,6 +710,7 @@
 
     const payload = {
       token: APP.token,
+      sessionToken: user.token || "",   // เซิร์ฟเวอร์ใช้ค่านี้ระบุว่าใครส่ง (identity ด้านล่างเก็บไว้เพื่อความเข้ากันได้ย้อนหลัง)
       action: "submitExam",
       subject: subject.slug,
       sessionId,
