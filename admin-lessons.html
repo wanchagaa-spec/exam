@@ -438,23 +438,29 @@
 
     const btn = document.getElementById("quizImportBtn");
     btn.disabled = true;
-    let ok = 0;
+    btn.textContent = `กำลังนำเข้า… (${items.length} ข้อ)`;
     const fails = [];
 
-    for (let i = 0; i < items.length; i++){
-      btn.textContent = `กำลังนำเข้า… (${i + 1}/${items.length})`;
-      const q = items[i] || {};
+    // ตรวจฝั่งเว็บก่อน แล้วส่งข้อที่ผ่านไปทีเดียวในคำขอเดียว (แพทเทิร์นเดียวกับ admin-import.html)
+    const valid = [], originalIndex = [];
+    items.forEach((raw, i) => {
+      const q = raw || {};
       const errMsg = validateBulkQuizItem(q);
-      if (errMsg){
-        fails.push("ข้อที่ " + (i + 1) + ": " + errMsg);
-        continue;
+      if (errMsg){ fails.push("ข้อที่ " + (i + 1) + ": " + errMsg); return; }
+      valid.push({ type: q.type, text: q.text, options: q.options || [], answer: q.answer, note: q.note || "" });
+      originalIndex.push(i + 1);
+    });
+
+    let ok = 0;
+    if (valid.length){
+      const res = await apiCall("adminSaveLessonQuizItemsBulk",
+        { adminPassword: adminPass(), lessonId: currentQuizLessonId, items: valid });
+      if (res.ok){
+        ok = (res.added || 0) + (res.updated || 0);
+        (res.failures || []).forEach(f => fails.push("ข้อที่ " + (originalIndex[f.index - 1] || f.index) + ": " + f.error));
+      } else {
+        fails.push("นำเข้าไม่สำเร็จ: " + (res.error || "ไม่ทราบสาเหตุ"));
       }
-      const res = await apiCall("adminSaveLessonQuizItem", {
-        adminPassword: adminPass(), lessonId: currentQuizLessonId,
-        type: q.type, text: q.text, options: q.options || [], answer: q.answer, note: q.note || ""
-      });
-      if (res.ok) ok++;
-      else fails.push("ข้อที่ " + (i + 1) + ": " + (res.error || "ไม่ทราบสาเหตุ"));
     }
 
     btn.disabled = false;

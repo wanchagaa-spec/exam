@@ -50,8 +50,8 @@
  *               note    : คำอธิบายเฉลย (ไม่บังคับ) พิมพ์สมการคณิตศาสตร์แบบ LaTeX ได้ เช่น $x^2+1$
  *               strand  : สาระ/หมวดเนื้อหาของข้อนี้ ต้องตรงกับชื่อใน SUBJECT_STRANDS (assets/demo-data.js) เป๊ะ ๆ
  *                         ใช้ตอนสุ่มข้อสอบแยกตามโครงสร้างชุดข้อสอบ (Blueprint)
- *   Lessons    : id | subject | strand | order | title | content | visible | updatedAt
- *               ── เนื้อหาการเรียนรู้ (แยกจากข้อสอบ) จัดการผ่าน admin-lessons.html
+ *   Lessons    : id | subject | strand | order | title | pdfUrl | visible | updatedAt
+ *               ── เนื้อหาการเรียนรู้ (แยกจากข้อสอบ) เป็นไฟล์ PDF ที่แอดมินอัปโหลด จัดการผ่าน admin-lessons.html
  *   LessonQuiz : id | lessonId | type | text | options | answer | note
  *               ── แบบทดสอบท้ายบทเรียน แยกเอกเทศจากคลังข้อสอบหลัก Q_<slug> ไม่จับเวลา ไม่บันทึกลง Results
  *   LessonProgress : email | lessonId | completedAt
@@ -129,9 +129,9 @@ function doGet(e) {
    (ช่วยให้การโหลดบอร์ด/รายการต่าง ๆ เร็วขึ้น โดยเฉพาะเวลามีคนใช้งานพร้อมกันหลายคน) */
 const READ_ONLY_ACTIONS = new Set([
   // 'login' ไม่อยู่ในนี้แล้ว เพราะตอนนี้ล็อกอินสำเร็จจะเขียนแถวเซสชันใหม่ลงชีต Sessions ด้วย
-  'blueprint', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
+  'blueprint', 'blueprintSummaries', 'listPosts', 'listComments', 'listNotifications', 'listMyResults',
   'trophyLeaderboard', 'trophyAllTime', 'trophyHallOfFame',
-  'listLessons', 'getLesson',
+  'listLessons', 'getLesson', 'getLessonPdf',
   'adminLogin', 'adminListQuestions', 'adminListBlueprintConfigs', 'adminListLessons', 'adminListLessonQuiz'
 ]);
 
@@ -179,6 +179,7 @@ function routeAction_(body) {
     case 'login':                return login(body);
     case 'logout':               return logout(body);
     case 'blueprint':            return { ok: true, sections: getBlueprint_(body.subject) };
+    case 'blueprintSummaries':   return blueprintSummaries(body);
     case 'updateAvatar':         return updateAvatar(body);
     case 'contact':              return contact(body);
     case 'submitExam':           return submitExam(body);
@@ -199,6 +200,7 @@ function routeAction_(body) {
     case 'adminLogin':           return adminLogin(body);
     case 'adminListQuestions':   return adminListQuestions(body);
     case 'adminAddQuestion':     return adminAddQuestion(body);
+    case 'adminAddQuestionsBulk': return adminAddQuestionsBulk(body);
     case 'adminDeleteQuestion':  return adminDeleteQuestion(body);
     case 'uploadQuestionImage':  return uploadQuestionImage(body);
     case 'adminListBlueprintConfigs':  return adminListBlueprintConfigs(body);
@@ -207,6 +209,7 @@ function routeAction_(body) {
     case 'adminSetActiveBlueprintConfig': return adminSetActiveBlueprintConfig(body);
     case 'listLessons':          return listLessons(body);
     case 'getLesson':            return getLesson(body);
+    case 'getLessonPdf':         return getLessonPdf(body);
     case 'submitLessonQuiz':     return submitLessonQuiz(body);
     case 'adminListLessons':     return adminListLessons(body);
     case 'adminSaveLesson':      return adminSaveLesson(body);
@@ -215,6 +218,7 @@ function routeAction_(body) {
     case 'adminReorderLessons':  return adminReorderLessons(body);
     case 'adminListLessonQuiz':  return adminListLessonQuiz(body);
     case 'adminSaveLessonQuizItem':   return adminSaveLessonQuizItem(body);
+    case 'adminSaveLessonQuizItemsBulk': return adminSaveLessonQuizItemsBulk(body);
     case 'adminDeleteLessonQuizItem': return adminDeleteLessonQuizItem(body);
     default:                     return { ok: false, error: 'unknown action' };
   }
@@ -737,6 +741,32 @@ function getBlueprint_(subject) {
   return out;
 }
 
+/** สรุปโครงสร้างชุดที่ active ของหลายวิชาพร้อมกันในคำขอเดียว — อ่านชีต Blueprint รอบเดียวแล้วแยกตามวิชา
+    (เดิมหน้ารายวิชายิง action 'blueprint' ทีละวิชา 9 คำขอพร้อมกัน ทั้งที่ข้อมูลทุกวิชาอยู่ในชีตเดียวกัน) */
+function blueprintSummaries(body) {
+  const wanted = Array.isArray(body.subjects) ? body.subjects.slice(0, 50).map(x => String(x).slice(0, 50)) : [];
+  const out = {};
+  wanted.forEach(slug => { out[slug] = { sections: [], total: 0 }; });
+  if (!wanted.length) return { ok: true, summaries: out };
+
+  const sh = ss_().getSheetByName('Blueprint');
+  if (!sh || sh.getLastColumn() <= 4) return { ok: true, summaries: out };
+
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[2]) continue;                       // เฉพาะชุดที่ active
+    const entry = out[String(r[0])];
+    if (!entry) continue;                      // วิชาที่หน้าเว็บไม่ได้ขอมา
+    entry.sections.push({ order: Number(r[3]) || 0, strand: String(r[4] || ''), count: Number(r[5]) || 0 });
+  }
+  Object.keys(out).forEach(slug => {
+    out[slug].sections.sort((a, b) => a.order - b.order);
+    out[slug].total = out[slug].sections.reduce((sum, x) => sum + (x.count || 0), 0);
+  });
+  return { ok: true, summaries: out };
+}
+
 /** รายชื่อโครงสร้างชุดข้อสอบทั้งหมดของวิชาหนึ่ง (พร้อมส่วนของแต่ละชุด และชุดไหน active อยู่) */
 function adminListBlueprintConfigs(body) {
   if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
@@ -856,7 +886,9 @@ function adminSetActiveBlueprintConfig(body) {
     rows[i][2] = isThis;
   }
   if (!found) return { ok: false, error: 'ไม่พบโครงสร้างชุดนี้' };
-  sh.getRange(1, 1, rows.length, 6).setValues(rows);
+  // ตัด/เติมให้เหลือ 6 คอลัมน์พอดีก่อนเขียนกลับ ไม่งั้นถ้าชีตมีคอลัมน์เกินมา setValues จะ error ทั้งคำขอ
+  const normalized = rows.map(r => { const row = r.slice(0, 6); while (row.length < 6) row.push(''); return row; });
+  sh.getRange(1, 1, normalized.length, 6).setValues(normalized);
 
   return { ok: true };
 }
@@ -1141,26 +1173,40 @@ function getLesson(body) {
     .map(r => ({ id: String(r[0]), type: String(r[2]), text: String(r[3] || ''),
                  options: String(r[4] || '').split('|').filter(Boolean) }));
 
-  // ส่งไฟล์ PDF กลับเป็น base64 ผ่าน endpoint ของเราเอง แทนที่จะให้หน้าเว็บดึงจาก Drive ตรงๆ
-  // (ฝั่งเว็บวาดเองด้วย PDF.js ต้องได้ bytes จริง ดึงข้าม origin จาก Drive ตรงๆ ติด CORS)
-  let pdfDataUrl = '';
-  const fileId = driveFileIdFromUrl_(lesson.pdfUrl);
-  if (fileId) {
-    try {
-      const blob = DriveApp.getFileById(fileId).getBlob();
-      pdfDataUrl = 'data:application/pdf;base64,' + Utilities.base64Encode(blob.getBytes());
-    } catch (err) {
-      pdfDataUrl = ''; // โหลดไฟล์ไม่ได้ก็ปล่อยว่าง ฝั่งเว็บจะ fallback ไปโชว์ลิงก์เปิดในแท็บใหม่แทน
-    }
-  }
-
+  // ไฟล์ PDF ไม่ได้ส่งมากับคำขอนี้แล้ว — หน้าเว็บขอแยกทาง getLessonPdf ต่างหาก
+  // ทำให้ชื่อบท/แบบทดสอบขึ้นทันทีโดยไม่ต้องรอ base64 ของไฟล์หลายเมกะไบต์ และไฟล์เสียก็ไม่ทำให้ทั้งหน้าโหลดไม่ขึ้น
   return {
     ok: true,
     lesson: { id: lesson.id, subject: lesson.subject, strand: lesson.strand, title: lesson.title,
-               pdfUrl: lesson.pdfUrl, pdfDataUrl },
+               pdfUrl: lesson.pdfUrl, hasPdf: !!driveFileIdFromUrl_(lesson.pdfUrl) },
     quiz,
     completed: completedLessonIds_(email).has(id)
   };
+}
+
+/** ไฟล์ PDF ของบทเรียนเป็น base64 — แยกออกมาจาก getLesson เพื่อให้หน้าเว็บโหลดเนื้อหาส่วนอื่นได้ก่อน
+    (ส่งผ่าน endpoint ของเราเอง เพราะฝั่งเว็บวาดเองด้วย PDF.js ต้องได้ bytes จริง ดึงจาก Drive ตรง ๆ ติด CORS) */
+function getLessonPdf(body) {
+  const id = String(body.id || '').trim();
+
+  const rows = lessonsSheet_().getDataRange().getValues();
+  let row = null;
+  for (let i = 1; i < rows.length; i++) { if (String(rows[i][0]) === id) { row = rows[i]; break; } }
+  if (!row) return { ok: false, error: 'ไม่พบเนื้อหานี้' };
+
+  const lesson = lessonRowToObj_(row);
+  if (!lesson.visible) return { ok: false, error: 'เนื้อหานี้ยังไม่เปิดให้เข้าดู' };
+
+  const fileId = driveFileIdFromUrl_(lesson.pdfUrl);
+  if (!fileId) return { ok: false, error: 'บทนี้ยังไม่มีไฟล์เนื้อหา' };
+
+  try {
+    const blob = DriveApp.getFileById(fileId).getBlob();
+    return { ok: true, pdfDataUrl: 'data:application/pdf;base64,' + Utilities.base64Encode(blob.getBytes()) };
+  } catch (err) {
+    // โหลดไฟล์ไม่ได้ ฝั่งเว็บจะ fallback ไปโชว์ลิงก์เปิดในแท็บใหม่แทน
+    return { ok: false, error: 'โหลดไฟล์ไม่สำเร็จ' };
+  }
 }
 
 function driveFileIdFromUrl_(url) {
@@ -1283,6 +1329,55 @@ function adminListLessonQuiz(body) {
   return { ok: true, quiz };
 }
 
+/** ตรวจ+แปลงข้อแบบทดสอบท้ายบท 1 ข้อให้เป็นแถวของชีต (คู่กับ questionRowFrom_ ของคลังข้อสอบหลัก) */
+function lessonQuizRowFrom_(lessonId, item) {
+  const type = (item.type === 'tf' || item.type === 'fill') ? item.type : 'mc';
+  const text = clean(item.text);
+  const options = type === 'mc' ? (Array.isArray(item.options) ? item.options.map(clean).filter(Boolean) : []) : [];
+  const answer = clean(item.answer);
+  const note = clean(item.note);
+
+  if (!text || !answer) return { error: 'กรอกข้อมูลไม่ครบ' };
+  if (type === 'mc' && options.length < 2) return { error: 'ต้องมีตัวเลือกอย่างน้อย 2 ข้อ' };
+  if (type === 'mc' && options.indexOf(answer) === -1) return { error: 'answer ต้องตรงกับหนึ่งใน options เป๊ะ ๆ' };
+  if (type === 'tf' && answer !== 'ถูก' && answer !== 'ผิด') return { error: 'answer ของ tf ต้องเป็น ถูก หรือ ผิด' };
+
+  const id = item.id && String(item.id).trim() ? String(item.id).trim() : 'lq_' + Utilities.getUuid().slice(0, 8);
+  return { row: [id, lessonId, type, text, options.join('|'), answer, note], id: id };
+}
+
+/** นำเข้าแบบทดสอบท้ายบทหลายข้อในคำขอเดียว — เขียนทีเดียวเหมือน adminAddQuestionsBulk */
+function adminSaveLessonQuizItemsBulk(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+
+  const lessonId = String(body.lessonId || '').trim();
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!lessonId) return { ok: false, error: 'ยังไม่ได้เลือกบทเรียน' };
+  if (!items.length) return { ok: false, error: 'ไม่มีข้อมูลให้นำเข้า' };
+  if (items.length > 500) return { ok: false, error: 'นำเข้าได้ครั้งละไม่เกิน 500 ข้อ' };
+
+  const sh = lessonQuizSheet_();
+  const rows = sh.getDataRange().getValues();
+  const rowOfId = {};
+  for (let i = 1; i < rows.length; i++) rowOfId[String(rows[i][0])] = i + 1;
+
+  const toAppend = [];
+  const failures = [];
+  let updated = 0;
+
+  items.forEach((item, i) => {
+    const built = lessonQuizRowFrom_(lessonId, item || {});
+    if (built.error) { failures.push({ index: i + 1, error: built.error }); return; }
+    const existingRow = rowOfId[built.id];
+    if (existingRow) { sh.getRange(existingRow, 1, 1, built.row.length).setValues([built.row]); updated++; }
+    else toAppend.push(built.row);
+  });
+
+  if (toAppend.length) sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, 7).setValues(toAppend);
+
+  return { ok: true, added: toAppend.length, updated: updated, failures: failures };
+}
+
 function adminSaveLessonQuizItem(body) {
   if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
   const lessonId = String(body.lessonId || '').trim();
@@ -1341,35 +1436,84 @@ function adminListQuestions(body) {
   return { ok: true, questions: readBank_(subject) };
 }
 
+/** ตรวจ+แปลงข้อสอบ 1 ข้อให้เป็นแถวของชีต — ใช้ร่วมกันทั้งเพิ่มทีละข้อและนำเข้าทีละมาก ๆ
+    คืน { row } ถ้าผ่าน หรือ { error } ถ้าข้อมูลไม่ครบ (กฎเดียวกันทั้งสองทาง ไม่มีทางลัดให้ข้อเสียเล็ดลอดเข้าคลัง) */
+function questionRowFrom_(item) {
+  const type    = (item.type === 'tf' || item.type === 'fill') ? item.type : 'mc';
+  const text    = clean(item.text);
+  const options = type === 'mc' ? (Array.isArray(item.options) ? item.options.map(clean).filter(Boolean) : []) : [];
+  const answer  = clean(item.answer);
+  const score   = Number(item.score) || 1;
+  const note    = clean(item.note);
+  const strand  = clean(item.strand);
+
+  if (!text || !answer) return { error: 'กรอกข้อมูลไม่ครบ' };
+  if (type === 'mc' && options.length < 2) return { error: 'ต้องมีตัวเลือกอย่างน้อย 2 ข้อ' };
+  if (type === 'mc' && options.indexOf(answer) === -1) return { error: 'answer ต้องตรงกับหนึ่งใน options เป๊ะ ๆ' };
+  if (type === 'tf' && answer !== 'ถูก' && answer !== 'ผิด') return { error: 'answer ของ tf ต้องเป็น ถูก หรือ ผิด' };
+
+  const id = item.id && String(item.id).trim() ? String(item.id).trim() : 'q_' + Utilities.getUuid().slice(0, 8);
+  return { row: [id, type, text, options.join('|'), answer, score, note, strand], id: id };
+}
+
+const QUESTION_HEADERS = ['id', 'type', 'text', 'options', 'answer', 'score', 'note', 'strand'];
+
 function adminAddQuestion(body) {
   if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
 
   const subject = String(body.subject || '').slice(0, 50);
-  const type    = (body.type === 'tf' || body.type === 'fill') ? body.type : 'mc';
-  const text    = clean(body.text);
-  const options = type === 'mc' ? (Array.isArray(body.options) ? body.options.map(clean).filter(Boolean) : []) : [];
-  const answer  = clean(body.answer);
-  const score   = Number(body.score) || 1;
-  const note    = clean(body.note);
-  const strand  = clean(body.strand);
+  if (!subject) return { ok: false, error: 'ไม่ได้ระบุวิชา' };
 
-  if (!subject || !text || !answer) return { ok: false, error: 'กรอกข้อมูลไม่ครบ' };
-  if (type === 'mc' && options.length < 2) return { ok: false, error: 'ต้องมีตัวเลือกอย่างน้อย 2 ข้อ' };
+  const built = questionRowFrom_(body);
+  if (built.error) return { ok: false, error: built.error };
 
-  const sh = sheet_('Q_' + subject, ['id', 'type', 'text', 'options', 'answer', 'score', 'note', 'strand']);
-  const id = body.id && String(body.id).trim() ? String(body.id).trim() : 'q_' + Utilities.getUuid().slice(0, 8);
-
+  const sh = sheet_('Q_' + subject, QUESTION_HEADERS);
   const rows = sh.getDataRange().getValues();
   let rowIndex = -1;
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === id) { rowIndex = i + 1; break; }
+    if (String(rows[i][0]) === built.id) { rowIndex = i + 1; break; }
   }
 
-  const rowData = [id, type, text, options.join('|'), answer, score, note, strand];
-  if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
-  else sh.appendRow(rowData);
+  if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, built.row.length).setValues([built.row]);
+  else sh.appendRow(built.row);
 
-  return { ok: true, id: id };
+  return { ok: true, id: built.id };
+}
+
+/** นำเข้าข้อสอบหลายข้อในคำขอเดียว — เขียนข้อใหม่ทั้งหมดทีเดียวด้วย setValues ครั้งเดียว
+    (เดิมหน้านำเข้าวนเรียก adminAddQuestion ทีละข้อ 150 ข้อ = 150 คำขอ แต่ละคำขออ่าน/เขียนชีตใหม่หมด
+     ช้ามากและเสี่ยงชนโควตา Apps Script) */
+function adminAddQuestionsBulk(body) {
+  if (!requireAdmin_(body)) return { ok: false, error: 'unauthorized' };
+
+  const subject = String(body.subject || '').slice(0, 50);
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!subject) return { ok: false, error: 'ไม่ได้ระบุวิชา' };
+  if (!items.length) return { ok: false, error: 'ไม่มีข้อมูลให้นำเข้า' };
+  if (items.length > 500) return { ok: false, error: 'นำเข้าได้ครั้งละไม่เกิน 500 ข้อ' };
+
+  const sh = sheet_('Q_' + subject, QUESTION_HEADERS);
+  const rows = sh.getDataRange().getValues();
+  const rowOfId = {};
+  for (let i = 1; i < rows.length; i++) rowOfId[String(rows[i][0])] = i + 1;
+
+  const toAppend = [];
+  const failures = [];
+  let updated = 0;
+
+  items.forEach((item, i) => {
+    const built = questionRowFrom_(item || {});
+    if (built.error) { failures.push({ index: i + 1, error: built.error }); return; }
+    const existingRow = rowOfId[built.id];
+    if (existingRow) { sh.getRange(existingRow, 1, 1, built.row.length).setValues([built.row]); updated++; }
+    else toAppend.push(built.row);
+  });
+
+  if (toAppend.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, QUESTION_HEADERS.length).setValues(toAppend);
+  }
+
+  return { ok: true, added: toAppend.length, updated: updated, failures: failures };
 }
 
 function adminDeleteQuestion(body) {
@@ -1488,14 +1632,6 @@ function isCorrect_(type, given, answerStored) {
 function clean(v) {
   if (v === undefined || v === null) return '';
   let s = String(v).slice(0, 1000);
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-  return s;
-}
-
-/** เหมือน clean() แต่ไม่จำกัดความยาวแค่ 1000 ตัวอักษร ใช้กับเนื้อหาบทเรียนที่ยาวกว่าโจทย์ข้อสอบทั่วไป */
-function cleanLong_(v, maxLen) {
-  if (v === undefined || v === null) return '';
-  let s = String(v).slice(0, maxLen || 20000);
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return s;
 }

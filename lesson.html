@@ -121,7 +121,7 @@
       <div id="quizArea"></div>
     `;
 
-    renderQuiz();
+    renderQuiz();       // แบบทดสอบขึ้นทันที ไม่ต้องรอไฟล์ PDF ที่อาจใหญ่หลายเมกะไบต์
     loadLessonPdf(res.lesson);
   }
 
@@ -134,21 +134,30 @@
       ? `<div class="pdffallback">เปิดไฟล์ไม่ขึ้น? <a href="${escHtml(viewUrl)}" target="_blank" rel="noopener">เปิดไฟล์ PDF ในแท็บใหม่</a></div>`
       : "";
 
-    if (!lesson.pdfDataUrl){
+    if (!lesson.hasPdf){
       pdfBox.innerHTML = lesson.pdfUrl
         ? `<p class="nopdf">โหลดไฟล์ไม่สำเร็จ</p>${fallbackLink}`
         : '<p class="nopdf">ยังไม่มีไฟล์เนื้อหาสำหรับบทนี้</p>';
       return;
     }
 
+    // ไฟล์ PDF ขอแยกจาก getLesson เพื่อให้ส่วนอื่นของหน้าขึ้นก่อน
+    const pdfRes = await apiCall("getLessonPdf", { id: lessonId });
+    if (!pdfRes.ok || !pdfRes.pdfDataUrl){
+      pdfBox.innerHTML = `<p class="nopdf">${escHtml(pdfRes.error || "โหลดไฟล์ไม่สำเร็จ")}</p>${fallbackLink}`;
+      return;
+    }
+
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
-      const base64 = lesson.pdfDataUrl.split(",")[1] || "";
+      const base64 = pdfRes.pdfDataUrl.split(",")[1] || "";
       const binary = atob(base64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+      // isEvalSupported:false ปิดการ eval ภายในของ PDF.js — กันช่องโหว่ CVE-2024-4367 ของเวอร์ชันนี้
+      // ที่ไฟล์ PDF ซึ่งถูกสร้างมาเจาะโดยเฉพาะสามารถสั่งรันสคริปต์ในหน้าเว็บได้
+      pdfDoc = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise;
       pdfPageNum = 1;
 
       pdfBox.innerHTML = `

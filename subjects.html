@@ -46,12 +46,7 @@
     </div>
   `).join("");
 
-  visibleSubjects().forEach(async s => {
-    const sum = await blueprintSummary(s.slug);
-    const el = document.getElementById("stat_" + s.slug);
-    if (!el) return;
-    el.textContent = sum.total ? (sum.sections.length + " ส่วน • " + sum.total + " ข้อ") : "ยังไม่ได้ตั้งโครงสร้างข้อสอบ";
-  });
+  fillSubjectStats(visibleSubjects());
 </script>
 </body>
 </html>

@@ -711,6 +711,32 @@ async function blueprintSummary(subject){
   return { sections, total: sections.reduce((s,x) => s + (x.count||0), 0) };
 }
 
+/** สรุปโครงสร้างของหลายวิชาพร้อมกันด้วยคำขอเดียว — ใช้ที่หน้าแรกและหน้ารายวิชาที่ต้องแสดงหลายการ์ดพร้อมกัน
+    (เดิมยิงทีละวิชา หน้ารายวิชา 9 วิชา = 9 คำขอ ทุกครั้งที่เปิดหน้า)
+    คืน Map<slug, {sections, total}> — วิชาที่ยังไม่ได้ตั้งโครงสร้างจะได้ total = 0 */
+async function blueprintSummaryMap(slugs){
+  const map = new Map();
+  if (!slugs.length) return map;
+  const res = await apiCall("blueprintSummaries", { subjects: slugs });
+  const summaries = (res.ok && res.summaries) || {};
+  slugs.forEach(slug => {
+    const entry = summaries[slug] || { sections: [], total: 0 };
+    map.set(slug, { sections: entry.sections || [], total: entry.total || 0 });
+  });
+  return map;
+}
+
+/** เติมข้อความสรุปโครงสร้างลงในการ์ดรายวิชา (span id="stat_<slug>") — ใช้ร่วมกันที่ index.html และ subjects.html */
+async function fillSubjectStats(subjects){
+  const map = await blueprintSummaryMap(subjects.map(s => s.slug));
+  subjects.forEach(s => {
+    const el = document.getElementById("stat_" + s.slug);
+    if (!el) return;
+    const sum = map.get(s.slug) || { sections: [], total: 0 };
+    el.textContent = sum.total ? (sum.sections.length + " ส่วน • " + sum.total + " ข้อ") : "ยังไม่ได้ตั้งโครงสร้างข้อสอบ";
+  });
+}
+
 /* ══════════════════════════ ตราสัญลักษณ์ "มหาเทพพยายาม" (ถ้วยความพยายาม) ══════════════════════════
    วาดเป็น SVG ล้วน ไม่มีไฟล์รูปแยก — พารามิเตอร์เดียวกันสร้างได้ทุกอันดับ/ทุกขนาด
    อันดับ 1 = ทอง, อันดับ 2 = เงิน, อันดับ 3-10 = ทองแดง (ดีไซน์จากไฟล์อ้างอิงที่ลูกค้าส่งมา) */
@@ -1106,6 +1132,37 @@ async function demoApi(action, payload){
     return { ok:true, questions: demoBankLoad(payload.subject) };
   }
 
+  /* นำเข้าทีละมาก ๆ — เขียนลง localStorage ทีเดียวเหมือนที่ฝั่งเซิร์ฟเวอร์เขียนชีตทีเดียว */
+  if (action === "adminAddQuestionsBulk"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const list = demoBankLoad(payload.subject);
+    let added = 0, updated = 0;
+    (payload.items || []).forEach((item, i) => {
+      const id = item.id || ("q_" + Date.now().toString(36) + i.toString(36));
+      const q = { id, type: item.type, text: item.text, options: item.options || [], answer: item.answer,
+                  score: item.score || 1, note: item.note || "", strand: item.strand || "" };
+      const idx = list.findIndex(x => x.id === id);
+      if (idx >= 0){ list[idx] = q; updated++; } else { list.push(q); added++; }
+    });
+    demoBankSave(payload.subject, list);
+    return { ok:true, added, updated, failures: [] };
+  }
+
+  if (action === "adminSaveLessonQuizItemsBulk"){
+    if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
+    const list = demoLessonQuizAllLoad();
+    let added = 0, updated = 0;
+    (payload.items || []).forEach((item, i) => {
+      const id = item.id || ("lq_" + Date.now().toString(36) + i.toString(36));
+      const q = { id, lessonId: payload.lessonId, type: item.type, text: item.text,
+                  options: item.options || [], answer: item.answer, note: item.note || "" };
+      const idx = list.findIndex(x => x.id === id);
+      if (idx >= 0){ list[idx] = q; updated++; } else { list.push(q); added++; }
+    });
+    demoLessonQuizAllSave(list);
+    return { ok:true, added, updated, failures: [] };
+  }
+
   if (action === "adminAddQuestion"){
     if (payload.adminPassword !== APP.demoAdminPassword) return { ok:false, error:"unauthorized" };
     const list = demoBankLoad(payload.subject);
@@ -1126,6 +1183,15 @@ async function demoApi(action, payload){
 
   if (action === "blueprint"){
     return { ok:true, sections: demoBlueprintLoad(payload.subject) };
+  }
+
+  if (action === "blueprintSummaries"){
+    const summaries = {};
+    (payload.subjects || []).forEach(slug => {
+      const sections = demoBlueprintLoad(slug);
+      summaries[slug] = { sections, total: sections.reduce((s, x) => s + (x.count || 0), 0) };
+    });
+    return { ok:true, summaries };
   }
 
   if (action === "listMyResults"){
@@ -1162,10 +1228,20 @@ async function demoApi(action, payload){
       .map(q => ({ id:q.id, type:q.type, text:q.text, options:q.options || [] }));
     return {
       ok:true,
-      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title, pdfUrl: found.pdfUrl, pdfDataUrl: found.pdfUrl },
+      // โหมดตัวอย่างเก็บไฟล์ PDF เป็น data URL ตรง ๆ ใน pdfUrl อยู่แล้ว (ไม่มี Drive) — ขอเนื้อไฟล์ทาง getLessonPdf เหมือนของจริง
+      lesson: { id: found.id, subject: subjectOfLesson, strand: found.strand, title: found.title,
+                pdfUrl: found.pdfUrl, hasPdf: !!found.pdfUrl },
       quiz,
       completed: demoCompletedLessonIds(email).has(found.id)
     };
+  }
+
+  if (action === "getLessonPdf"){
+    for (const s of SUBJECTS){
+      const l = demoLessonsLoad(s.slug).find(x => x.id === payload.id);
+      if (l) return l.pdfUrl ? { ok:true, pdfDataUrl: l.pdfUrl } : { ok:false, error:"บทนี้ยังไม่มีไฟล์เนื้อหา" };
+    }
+    return { ok:false, error:"ไม่พบเนื้อหานี้" };
   }
 
   if (action === "submitLessonQuiz"){

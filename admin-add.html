@@ -129,7 +129,6 @@
   "use strict";
   const LET = ["ก","ข","ค","ง","จ","ฉ"];
   let sessionCount = 0;
-  let attachedImageUrl = "";
 
   renderHeader("admin.html");
   renderFooter();
@@ -234,7 +233,6 @@
       const dataUrl = await resizeImageToDataUrlFit(file, 1000);
       const res = await apiCall("uploadQuestionImage", { adminPassword: adminPass(), dataUrl, filename: file.name });
       if (res.ok){
-        attachedImageUrl = res.url;
         const textEl = document.getElementById("textInput");
         textEl.value = textEl.value.replace(/\n\n!\[รูปประกอบ\]\([^)]*\)\s*$/, "").trimEnd() + `\n\n![รูปประกอบ](${res.url})`;
         const preview = document.getElementById("imgUploadPreview");
@@ -294,7 +292,6 @@
       addOptionRow(); addOptionRow();
       refreshAnswerOptions();
       document.getElementById("answerInputFill").value = "";
-      attachedImageUrl = "";
       document.getElementById("imgUploadMsg").innerHTML = "";
       document.getElementById("imgUploadPreview").classList.add("hidden");
       document.getElementById("textInput").focus();

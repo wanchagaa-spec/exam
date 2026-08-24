@@ -95,12 +95,7 @@
     </a>
   `).join("");
 
-  visibleSubjects().slice(0,3).forEach(async s => {
-    const sum = await blueprintSummary(s.slug);
-    const el = document.getElementById("stat_" + s.slug);
-    if (!el) return;
-    el.textContent = sum.total ? (sum.sections.length + " ส่วน • " + sum.total + " ข้อ") : "ยังไม่ได้ตั้งโครงสร้างข้อสอบ";
-  });
+  fillSubjectStats(visibleSubjects().slice(0,3));
 
   document.getElementById("newsPreview").innerHTML = NEWS.slice(0,3).map(n => `
     <div class="card">
