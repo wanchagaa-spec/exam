@@ -195,16 +195,13 @@
     loadTrophyBanner(results);
   }
 
-  /* ── ป้ายกระตุ้น: สรุปสถานะถ้วยความพยายามเดือนนี้ของตัวเอง ── */
-  function isValidTrophyRound(r){
-    return r.percent > 50 && r.usedSeconds >= 3600 && !r.auto;
-  }
+  /* ── ป้ายกระตุ้น: สรุปสถานะถ้วยความพยายามเดือนนี้ของตัวเอง ──
+     ใช้ isValidTrophyRound()/monthKeyLocal() จาก assets/site.js ตัวเดียวกับที่ leaderboard ใช้
+     (เคยนิยามเกณฑ์ซ้ำไว้ตรงนี้ พอแก้ที่เดียวแล้วอีกที่ไม่ตาม ตัวเลขบนป้ายกับอันดับจริงจะไม่ตรงกัน) */
   async function loadTrophyBanner(results){
     const banner = document.getElementById("trophyBanner");
-    // ใช้ demoMonthKey() ตัวเดียวกับที่ leaderboard จริงใช้ (ตัดเดือนจากเวลาท้องถิ่น ไม่ใช่ตัด string ISO แบบ UTC ตรงๆ)
-    // ไม่งั้นรอบที่ทำช่วงต้นเดือนตามเวลาไทยจะถูกนับผิดเดือนเทียบกับ leaderboard จริง
-    const thisMonth = demoMonthKey(new Date());
-    const myCount = results.filter(r => isValidTrophyRound(r) && demoMonthKey(r.timestamp) === thisMonth).length;
+    const thisMonth = monthKeyLocal(new Date());
+    const myCount = results.filter(r => isValidTrophyRound(r) && monthKeyLocal(r.timestamp) === thisMonth).length;
 
     const lb = await apiCall("trophyLeaderboard", {});
     if (!lb.ok){ banner.classList.add("hidden"); return; }

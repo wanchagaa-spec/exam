@@ -110,7 +110,7 @@ function doGet(e) {
 
   if (p.action === 'exam') {
     if (p.token !== token_()) return json({ ok: false, error: 'unauthorized' });
-    return json(serveExam(p.subject));
+    return json(serveExam(p.subject, p.minutes));
   }
 
   if (p.action === 'blueprint') {
@@ -750,7 +750,15 @@ function adminSetActiveBlueprintConfig(body) {
   return { ok: true };
 }
 
-function serveExam(subject) {
+/** เวลาที่อนุญาตของชุดข้อสอบ (วินาที) — ฝั่งเว็บส่ง minutes ของวิชานั้นมาจาก SUBJECTS ใน assets/demo-data.js
+    จำกัดช่วงไว้กันค่าเพี้ยน/ค่าที่จงใจส่งมั่ว ส่งมาไม่ครบก็ยังทำข้อสอบได้ตามปกติ แค่ไม่มีข้อมูลไว้ตัดสินว่าหมดเวลาหรือเปล่า */
+function limitSecondsFrom_(minutes) {
+  const m = Number(minutes) || 0;
+  if (m <= 0) return 0;
+  return Math.min(Math.max(Math.round(m), 1), 300) * 60;
+}
+
+function serveExam(subject, minutes) {
   subject = String(subject || '').slice(0, 50);
   const bank = readBank_(subject);
   if (!bank.length) return { ok: false, error: 'ยังไม่มีคลังข้อสอบวิชานี้ (สร้างชีต Q_' + subject + ' ก่อน)' };
@@ -781,7 +789,10 @@ function serveExam(subject) {
   const sessionId = Utilities.getUuid();
   const key = {};
   picked.forEach(q => { key[q.id] = { type: q.type, answer: q.answer, score: q.score, note: q.note }; });
-  CacheService.getScriptCache().put(sessionId, JSON.stringify({ subject, key }), CACHE_SECONDS);
+  // เก็บ "เวลาที่เริ่มทำ" ไว้ฝั่งเซิร์ฟเวอร์ตั้งแต่ตอนแจกข้อสอบ เพื่อคำนวณเวลาที่ใช้จริงตอนส่ง
+  // (เดิมเชื่อค่า meta.used ที่หน้าเว็บส่งมา ซึ่งแก้ได้ง่ายมาก ใช้ปั๊มอันดับถ้วยมหาเทพพยายามได้เลย)
+  CacheService.getScriptCache().put(sessionId,
+    JSON.stringify({ subject, key, startedAt: Date.now(), limitSeconds: limitSecondsFrom_(minutes) }), CACHE_SECONDS);
 
   const questions = picked.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options, section: q.sectionLabel }));
 
@@ -800,6 +811,17 @@ function submitExam(body) {
   const id = body.identity || {};
   const meta = body.meta || {};
 
+  /* เวลาที่ใช้ = เวลาปัจจุบัน − เวลาที่เซิร์ฟเวอร์แจกข้อสอบ ไม่รับค่าจากหน้าเว็บอีกต่อไป
+     เซสชันเก่าที่แจกไปก่อนอัปเดตนี้จะไม่มี startedAt — ยอมรับค่าจากหน้าเว็บไปก่อนเฉพาะกรณีนั้น
+     (หมดอายุเองใน CACHE_SECONDS วินาที หลังจากนั้นทุกเซสชันจะมี startedAt ครบ)
+     ธง auto: ถ้าหน้าเว็บบอกว่าหมดเวลาส่งอัตโนมัติก็เชื่อ แต่ถ้าเวลาที่ใช้เกินเวลาที่อนุญาต
+     ก็ถือว่าหมดเวลาเหมือนกัน ต่อให้หน้าเว็บจะบอกว่าไม่ใช่ก็ตาม — รอบที่หมดเวลาไม่นับเข้าถ้วย */
+  const usedSeconds = session.startedAt
+    ? Math.max(0, Math.round((Date.now() - session.startedAt) / 1000))
+    : (Number(meta.used) || 0);
+  const limitSeconds = Number(session.limitSeconds) || 0;
+  const autoSubmitted = !!meta.auto || (limitSeconds > 0 && usedSeconds > limitSeconds + 2);
+
   let score = 0, total = 0;
   const detail = {};
   Object.keys(key).forEach(qid => {
@@ -816,7 +838,7 @@ function submitExam(body) {
 
   sheet_('Results', ['timestamp', 'subject', 'email', 'name', 'score', 'total', 'percent', 'passed', 'usedSeconds', 'auto'])
     .appendRow([new Date(), body.subject, clean(id.email), clean(id.name), score, total, percent,
-                passed ? 'ผ่าน' : 'ไม่ผ่าน', meta.used || '', meta.auto ? 'ใช่' : '']);
+                passed ? 'ผ่าน' : 'ไม่ผ่าน', usedSeconds, autoSubmitted ? 'ใช่' : '']);
 
   CacheService.getScriptCache().remove(body.sessionId);
 
@@ -853,12 +875,19 @@ function listMyResults(body) {
 /* ══════════════════════════ ถ้วยความพยายาม "มหาเทพพยายาม" ══════════════════════════
    1 รอบนับได้ต้องครบ 3 เงื่อนไข: ทำเวลาไม่ต่ำกว่า 1 ชม. (usedSeconds>=3600), ตอบครบทุกข้อ (ไม่ใช่ auto-submit
    ตอนหมดเวลา — ปุ่มส่งคำตอบฝั่งเว็บบังคับตอบครบอยู่แล้วก่อนจะกดส่งเองได้ กรณีเดียวที่ไม่ครบคือหมดเวลาแล้วระบบส่งให้อัตโนมัติ),
-   และคะแนนเกิน 50% — นับรวมทุกวิชา ไม่แยกกระดาน ไม่ต้องเพิ่มคอลัมน์ใหม่ในชีต Results เลย ใช้ข้อมูลที่มีอยู่แล้วทั้งหมด */
+   และคะแนนเกิน 50% — นับรวมทุกวิชา ไม่แยกกระดาน ไม่ต้องเพิ่มคอลัมน์ใหม่ในชีต Results เลย ใช้ข้อมูลที่มีอยู่แล้วทั้งหมด
+   ⚠ ทั้ง usedSeconds และ auto ที่เก็บลงชีต คำนวณจากนาฬิกาของเซิร์ฟเวอร์ใน submitExam() แล้ว (ตั้งแต่ ส.ค. 2569)
+      ไม่ได้รับค่าจากหน้าเว็บอีกต่อไป — แถวเก่าที่บันทึกไว้ก่อนหน้านั้นยังเป็นค่าที่หน้าเว็บส่งมา */
+/* เกณฑ์เดียวกับ TROPHY_RULE ใน assets/site.js (ฝั่งเว็บใช้ตอนแสดงป้ายสรุปในหน้าโปรไฟล์)
+   แก้ตัวเลขที่นี่แล้วต้องแก้ที่นั่นให้ตรงกันด้วย — คนละรูปแบบข้อมูล (แถวชีต vs อ็อบเจกต์) เลยรวมเป็นฟังก์ชันเดียวไม่ได้ */
+const TROPHY_MIN_PERCENT = 50;   // ต้อง "เกิน" ค่านี้
+const TROPHY_MIN_SECONDS = 3600; // ต้องไม่ต่ำกว่าค่านี้
+
 function isValidTrophyRound_(row) {
   const percent = Number(row[6]) || 0;
   const usedSeconds = Number(row[8]) || 0;
   const autoSubmitted = row[9] === 'ใช่';
-  return percent > 50 && usedSeconds >= 3600 && !autoSubmitted;
+  return percent > TROPHY_MIN_PERCENT && usedSeconds >= TROPHY_MIN_SECONDS && !autoSubmitted;
 }
 function monthKey_(date) {
   return Utilities.formatDate(date, ss_().getSpreadsheetTimeZone(), 'yyyy-MM');

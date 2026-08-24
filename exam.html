@@ -305,7 +305,10 @@
       sessionId = "demo";
     } else {
       try {
+        // ส่ง minutes ไปด้วยเพื่อให้เซิร์ฟเวอร์รู้เวลาที่อนุญาตของวิชานี้ ไว้ตัดสินว่ารอบไหนหมดเวลา
+        // (เวลาที่ใช้จริงเซิร์ฟเวอร์จับเองจากตอนแจกข้อสอบ ไม่ได้เชื่อค่าจากหน้าเว็บแล้ว)
         const url = APP.endpoint + "?action=exam&subject=" + encodeURIComponent(subject.slug) +
+          "&minutes=" + encodeURIComponent(subject.minutes) +
           "&token=" + encodeURIComponent(APP.token);
         const r = await fetch(url);
         const res = await r.json();
@@ -712,6 +715,8 @@
       sessionId,
       identity: { name: user.name, email: user.email },
       answers: ans,
+      // used ส่งไปเพื่อความเข้ากันได้กับเซสชันที่แจกก่อนอัปเดตนี้เท่านั้น เซิร์ฟเวอร์รุ่นใหม่คำนวณเองไม่ได้ใช้ค่านี้
+      // ส่วน auto ยังมีผลอยู่: เซิร์ฟเวอร์ถือว่าหมดเวลาถ้าหน้าเว็บแจ้งมา หรือถ้าเวลาที่จับได้เกินเวลาที่อนุญาต
       meta: { used: subject.minutes*60 - Math.max(left,0), auto: !!auto }
     };
 

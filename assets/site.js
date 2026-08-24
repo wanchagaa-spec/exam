@@ -596,11 +596,18 @@ function demoResultsAdd(entry){
   demoResultsSave(list);
 }
 
-/* โหมดตัวอย่าง: ถ้วยความพยายาม — ตรรกะเดียวกับฝั่งเซิร์ฟเวอร์ใน gas/Code.gs (isValidTrophyRound_/rankTrophyRows_) */
-function demoIsValidTrophyRound(r){
-  return (Number(r.percent) || 0) > 50 && (Number(r.usedSeconds) || 0) >= 3600 && !r.auto;
+/* ══ เกณฑ์ "รอบที่นับเข้าถ้วยมหาเทพพยายาม" — ใช้ร่วมกันทั้งโหมดตัวอย่างและป้ายสรุปในหน้าโปรไฟล์ ══
+   ต้องตรงกับ TROPHY_MIN_PERCENT / TROPHY_MIN_SECONDS ใน gas/Code.gs ซึ่งเป็นฝ่ายตัดสินจริงตอนจัดอันดับ */
+const TROPHY_RULE = { minPercent: 50, minSeconds: 3600 };
+function isValidTrophyRound(r){
+  return (Number(r.percent) || 0) > TROPHY_RULE.minPercent
+      && (Number(r.usedSeconds) || 0) >= TROPHY_RULE.minSeconds
+      && !r.auto;
 }
-function demoMonthKey(iso){
+
+/* ตัดเดือนจากเวลาท้องถิ่นของเครื่อง (ไม่ใช่ตัดสตริง ISO ซึ่งเป็น UTC) ให้ตรงกับ monthKey_() ฝั่งเซิร์ฟเวอร์
+   ใช้ทั้งในโหมดตัวอย่างและในหน้าโปรไฟล์จริง */
+function monthKeyLocal(iso){
   const d = new Date(iso);
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
 }
@@ -636,21 +643,21 @@ function demoRankTrophyRows(rows, limit){
   return out;
 }
 function demoTrophyAction(action, payload){
-  const validRows = demoResultsLoad().filter(demoIsValidTrophyRound);
+  const validRows = demoResultsLoad().filter(isValidTrophyRound);
 
   if (action === "trophyLeaderboard"){
-    const targetMonth = String(payload.month || "").trim() || demoMonthKey(new Date().toISOString());
-    const rows = validRows.filter(r => demoMonthKey(r.timestamp) === targetMonth);
+    const targetMonth = String(payload.month || "").trim() || monthKeyLocal(new Date().toISOString());
+    const rows = validRows.filter(r => monthKeyLocal(r.timestamp) === targetMonth);
     return { ok:true, month: targetMonth, entries: demoRankTrophyRows(rows, 10) };
   }
   if (action === "trophyAllTime"){
     return { ok:true, entries: demoRankTrophyRows(validRows, 10) };
   }
   // trophyHallOfFame
-  const currentMonth = demoMonthKey(new Date().toISOString());
+  const currentMonth = monthKeyLocal(new Date().toISOString());
   const byMonth = {};
   validRows.forEach(r => {
-    const month = demoMonthKey(r.timestamp);
+    const month = monthKeyLocal(r.timestamp);
     if (month === currentMonth) return;
     (byMonth[month] = byMonth[month] || []).push(r);
   });
