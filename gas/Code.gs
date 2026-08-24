@@ -11,11 +11,11 @@
  * วิธีตั้งค่า (ดูรายละเอียดเต็มใน README.md):
  *   1. สร้าง Google Sheet ใหม่ ตั้งชื่อ Sheet ตามหัวข้อ "โครงสร้างชีตที่ต้องมี" ด้านล่าง
  *   2. เปิด Extensions → Apps Script วางไฟล์นี้ทับ
- *   3. แก้ TOKEN ให้ตรงกับ APP.token ใน assets/site.js
- *   4. แก้ ADMIN_PASSWORD เป็นรหัสผ่านของผู้ดูแลเว็บไซต์ (ใช้เข้าหน้า admin.html)
- *   5. แก้ CONTACT_EMAIL เป็นอีเมลที่จะรับข้อความจากฟอร์มติดต่อ
- *   6. Deploy → New deployment → Web app → Execute as: Me / Who has access: Anyone
- *   7. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
+ *   3. ตั้งค่าลับที่ ⚙ Project Settings → Script Properties (ดูรายละเอียดที่หัวข้อ "ค่าลับ" ด้านล่าง)
+ *      ADMIN_PASSWORD (จำเป็น), CONTACT_EMAIL, TOKEN (ถ้าไม่ได้ใช้ค่าเริ่มต้น)
+ *      ⚠ ห้ามพิมพ์รหัสผ่านลงในไฟล์นี้ เพราะไฟล์นี้ถูก push ขึ้น GitHub สาธารณะ
+ *   4. Deploy → New deployment → Web app → Execute as: Me / Who has access: Anyone
+ *   5. เอา URL ที่ได้ไปใส่ใน APP.endpoint (assets/site.js) แล้วตั้ง APP.demoMode = false
  *
  * โครงสร้างชีตที่ต้องมี (สร้างเองใน Google Sheet เดียวกัน):
  *   Users      : timestamp | email | name | age | school | passHash | avatar
@@ -60,11 +60,33 @@
  *      ระบบจะถามขอสิทธิ์เพิ่ม (authorize) กดอนุญาตได้เลย ไม่ได้เข้าถึงไฟล์อื่นในไดรฟ์นอกเหนือจากโฟลเดอร์นี้
  */
 
-const TOKEN          = 'ai75jg8f3d9g7k3';         // ★ ต้องตรงกับ APP.token ใน assets/site.js
-const ADMIN_PASSWORD = 'b31208d89d';              // ★ ต้องเปลี่ยนก่อนใช้งานจริง — รหัสผ่านเข้าหน้า admin.html
+/* ══════════ ค่าลับทั้งหมดเก็บใน Script Properties ไม่เก็บในไฟล์นี้ ══════════
+   ⚠ ไฟล์นี้อยู่ใน GitHub ที่เปิดสาธารณะ ใครเปิดดูก็อ่านได้ ห้ามพิมพ์รหัสผ่านแอดมินลงตรงนี้เด็ดขาด
+
+   วิธีตั้งค่า (ทำครั้งเดียว ไม่ต้องแก้โค้ด):
+     หน้า Apps Script → ⚙ Project Settings → หัวข้อ "Script Properties" → Add script property
+       ADMIN_PASSWORD  = รหัสผ่านเข้าหน้า admin.html  ← จำเป็น ตั้งใหม่ อย่าใช้ค่าเก่าที่เคยอยู่ในไฟล์นี้
+       CONTACT_EMAIL   = อีเมลที่จะรับข้อความจากฟอร์มติดต่อ
+       TOKEN           = (ไม่บังคับ) ต้องตรงกับ APP.token ใน assets/site.js — ไม่ใส่ = ใช้ DEFAULT_TOKEN ด้านล่าง
+       PASSWORD_PEPPER = (ไม่บังคับ ⚠ ห้ามเปลี่ยนหลังมีสมาชิกแล้ว) ดูคำเตือนที่ hashPass_()
+     เสร็จแล้ว Deploy → Manage deployments → แก้ deployment เดิม → Version: New version → Deploy
+
+   ⚠ ถ้ายังไม่ตั้ง ADMIN_PASSWORD จะเข้าหน้าแอดมินไม่ได้เลย (ตั้งใจให้เป็นแบบนี้ ปลอดภัยกว่ามีรหัสเริ่มต้นติดมาในโค้ด) */
+
+/* TOKEN ไม่ใช่ความลับจริง ๆ เพราะหน้าเว็บ (assets/site.js) ต้องพกไปด้วยทุกคำขออยู่แล้ว
+   มีไว้กันคนยิง endpoint มั่ว ๆ เฉย ๆ — ตั้งทับได้ที่ Script Property ชื่อ TOKEN */
+const DEFAULT_TOKEN  = 'ai75jg8f3d9g7k3';
 const SHEET_ID       = '';                        // ★ เว้นว่างได้ถ้าผูกกับชีตอยู่แล้ว
-const CONTACT_EMAIL  = 'contact@example.com';     // ★ อีเมลที่จะรับข้อความจากฟอร์มติดต่อ
-const CACHE_SECONDS  = 7200;                       // อายุเซสชันข้อสอบ (วินาที) สูงสุด 21600
+const CACHE_SECONDS  = 7200;                      // อายุเซสชันข้อสอบ (วินาที) สูงสุด 21600
+
+/** อ่านค่าจาก Script Properties — ไม่มี/เว้นว่าง คืนค่า fallback ที่ส่งมา */
+function scriptProp_(key, fallback) {
+  const v = PropertiesService.getScriptProperties().getProperty(key);
+  return (v === null || v === '') ? fallback : v;
+}
+function token_()         { return scriptProp_('TOKEN', DEFAULT_TOKEN); }
+function adminPassword_() { return scriptProp_('ADMIN_PASSWORD', ''); }
+function contactEmail_()  { return scriptProp_('CONTACT_EMAIL', ''); }
 
 function ss_() {
   return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
@@ -87,12 +109,12 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
 
   if (p.action === 'exam') {
-    if (p.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
+    if (p.token !== token_()) return json({ ok: false, error: 'unauthorized' });
     return json(serveExam(p.subject));
   }
 
   if (p.action === 'blueprint') {
-    if (p.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
+    if (p.token !== token_()) return json({ ok: false, error: 'unauthorized' });
     return json({ ok: true, sections: getBlueprint_(p.subject) });
   }
 
@@ -112,7 +134,7 @@ const READ_ONLY_ACTIONS = new Set([
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
-    if (body.token !== TOKEN) return json({ ok: false, error: 'unauthorized' });
+    if (body.token !== token_()) return json({ ok: false, error: 'unauthorized' });
 
     if (READ_ONLY_ACTIONS.has(body.action)) {
       return json(routeAction_(body));
@@ -177,8 +199,13 @@ function routeAction_(body) {
 }
 
 /* ══════════════════════════ สมาชิก (ล็อกอินด้วยอีเมล) ══════════════════════════ */
+/** ⚠ PASSWORD_PEPPER คือค่าที่ผสมตอนแฮชรหัสผ่าน เปลี่ยนเมื่อไหร่ = สมาชิกทุกคนล็อกอินไม่ได้ทันที
+    ค่าเริ่มต้นคือ DEFAULT_TOKEN เพื่อให้รหัสผ่านที่แฮชไว้ก่อนหน้านี้ยังใช้ได้เหมือนเดิม ถึงแม้จะเปลี่ยน TOKEN ใหม่ก็ตาม
+    ตั้ง Script Property PASSWORD_PEPPER เฉพาะตอนเริ่มระบบใหม่ที่ยังไม่มีสมาชิกเท่านั้น */
+function passwordPepper_() { return scriptProp_('PASSWORD_PEPPER', DEFAULT_TOKEN); }
+
 function hashPass_(email, password) {
-  const raw = String(email).toLowerCase() + ':' + password + ':' + TOKEN;
+  const raw = String(email).toLowerCase() + ':' + password + ':' + passwordPepper_();
   const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
   return digest.map(b => (b + 256).toString(16).slice(-2)).join('');
 }
@@ -222,12 +249,17 @@ function login(body) {
   return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
 }
 
+/* รับเฉพาะ data URL ของรูปเท่านั้น — ค่าที่หลุดเข้ามาแบบอื่นจะถูกเอาไปใส่ใน src="..." ของ <img> ฝั่งหน้าเว็บ
+   ถ้าปล่อยให้ใส่สตริงอะไรก็ได้ จะกลายเป็นช่องทางฝังสคริปต์ (XSS) ผ่านรูปโปรไฟล์ */
+const AVATAR_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+\/=]+$/;
+
 /** อัปเดตรูปโปรไฟล์ (data URL ที่ย่อขนาดแล้วจากฝั่งเว็บ) — เก็บตรง ๆ ในเซลล์ชีต ไม่มีระบบเก็บไฟล์แยก */
 function updateAvatar(body) {
   const email  = String(body.email || '').trim().toLowerCase();
   const avatar = String(body.avatar || '');
   if (!email) return { ok: false, error: 'ไม่ได้ระบุอีเมล' };
   if (avatar.length > 45000) return { ok: false, error: 'ไฟล์รูปใหญ่เกินไป' };
+  if (avatar && !AVATAR_DATA_URL_RE.test(avatar)) return { ok: false, error: 'ไฟล์รูปโปรไฟล์ไม่ถูกต้อง' };
 
   const sh = usersSheet_();
   const rows = sh.getDataRange().getValues();
@@ -247,12 +279,22 @@ function contact(body) {
 
   sheet_('Contact', ['timestamp', 'name', 'email', 'message']).appendRow([new Date(), name, email, text]);
 
+  // ข้อความบันทึกลงชีตแล้วเสมอ ต่อให้ส่งอีเมลไม่สำเร็จก็ไม่ทำให้ทั้งคำขอ error (ผู้ส่งไม่ต้องพิมพ์ใหม่)
+  // แต่ต้องทิ้ง log ไว้ให้ตามได้ ไม่ใช่เงียบหายแบบเดิม — ดู log ที่ Apps Script → Executions
+  const to = contactEmail_();
+  if (!to) {
+    console.warn('contact: ยังไม่ได้ตั้ง Script Property CONTACT_EMAIL — บันทึกลงชีตแล้วแต่ยังไม่ได้ส่งอีเมลแจ้ง');
+    return { ok: true, mailed: false };
+  }
   try {
-    MailApp.sendEmail(CONTACT_EMAIL, 'ข้อความติดต่อใหม่จากเว็บไซต์ข้อสอบ',
+    MailApp.sendEmail(to, 'ข้อความติดต่อใหม่จากเว็บไซต์ข้อสอบ',
       'จาก: ' + name + ' <' + email + '>\n\n' + text);
-  } catch (err) { /* ส่งอีเมลไม่สำเร็จก็ยังบันทึกลงชีตไว้แล้ว ไม่ทำให้ทั้งคำขอ error */ }
+  } catch (err) {
+    console.error('contact: ส่งอีเมลไปที่ ' + to + ' ไม่สำเร็จ — ' + err);
+    return { ok: true, mailed: false };
+  }
 
-  return { ok: true };
+  return { ok: true, mailed: true };
 }
 
 /* ══════════════════════════ บอร์ดความคิดเห็น (โพส/ถูกใจ/คอมเมนต์) ══════════════════════════ */
@@ -1136,15 +1178,21 @@ function adminDeleteLessonQuizItem(body) {
 
 /* ══════════════════════════ แอดมิน: จัดการคลังข้อสอบ ══════════════════════════ */
 /**
- * ⚠ ระบบตรวจ ADMIN_PASSWORD ใหม่ทุกคำขอ (ไม่มีการออก session token)
+ * ⚠ ระบบตรวจรหัสผ่านผู้ดูแลใหม่ทุกคำขอ (ไม่มีการออก session token)
  *   ง่ายและพอเหมาะกับเว็บฝึกทำข้อสอบขนาดเล็ก แต่ไม่ใช่ระบบความปลอดภัยระดับองค์กร
- *   อย่าใช้รหัสผ่านเดียวกับบัญชีอื่นที่สำคัญ และเปลี่ยน ADMIN_PASSWORD ก่อนใช้งานจริงเสมอ
+ *   รหัสผ่านอ่านจาก Script Property ชื่อ ADMIN_PASSWORD เท่านั้น (ไม่มีค่าเริ่มต้นในโค้ด)
+ *   อย่าใช้รหัสผ่านเดียวกับบัญชีอื่นที่สำคัญ
  */
 function requireAdmin_(body) {
-  return !!(body && body.adminPassword && body.adminPassword === ADMIN_PASSWORD);
+  const expected = adminPassword_();
+  if (!expected) return false; // ยังไม่ได้ตั้ง Script Property → ล็อกทุกคำขอไว้ก่อน ดีกว่าเปิดด้วยค่าเริ่มต้นที่ใครก็เดาได้
+  return !!(body && body.adminPassword && body.adminPassword === expected);
 }
 
 function adminLogin(body) {
+  if (!adminPassword_()) {
+    return { ok: false, error: 'ระบบยังไม่ได้ตั้งรหัสผ่านผู้ดูแล — ตั้ง Script Property ชื่อ ADMIN_PASSWORD ใน Apps Script ก่อน' };
+  }
   return requireAdmin_(body) ? { ok: true } : { ok: false, error: 'รหัสผ่านผู้ดูแลไม่ถูกต้อง' };
 }
 

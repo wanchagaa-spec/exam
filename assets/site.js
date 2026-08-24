@@ -72,7 +72,8 @@ function renderSidebar(activeSlug){
 const NOTIF_LABEL = { like: "กดถูกใจโพสต์ของคุณ", comment: "แสดงความคิดเห็นในโพสต์ของคุณ" };
 function avatarHtml(user, size){
   size = size || 34;
-  if (user && user.avatar) return `<img class="avatar" style="width:${size}px;height:${size}px" src="${user.avatar}" alt="">`;
+  // escHtml ค่า avatar ด้วยเสมอ ถึงจะเป็น data URL ที่ระบบสร้างเองก็ตาม — กันค่าแปลกปลอมที่หลุดเข้าชีตมาแหกออกจาก src="..."
+  if (user && user.avatar) return `<img class="avatar" style="width:${size}px;height:${size}px" src="${escHtml(user.avatar)}" alt="">`;
   const initial = user && user.name ? user.name.trim().charAt(0) : "?";
   return `<span class="avatar initial" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.45)}px">${escHtml(initial)}</span>`;
 }
