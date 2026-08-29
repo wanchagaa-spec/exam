@@ -720,21 +720,48 @@ async function blueprintSummaryMap(slugs){
   const res = await apiCall("blueprintSummaries", { subjects: slugs });
   const summaries = (res.ok && res.summaries) || {};
   slugs.forEach(slug => {
-    const entry = summaries[slug] || { sections: [], total: 0 };
-    map.set(slug, { sections: entry.sections || [], total: entry.total || 0 });
+    const entry = summaries[slug] || { sections: [], total: 0, questionCount: 0 };
+    map.set(slug, { sections: entry.sections || [], total: entry.total || 0, questionCount: entry.questionCount || 0 });
   });
   return map;
 }
 
-/** เติมข้อความสรุปโครงสร้างลงในการ์ดรายวิชา (span id="stat_<slug>") — ใช้ร่วมกันที่ index.html และ subjects.html */
-async function fillSubjectStats(subjects){
+/** วิชานี้ "พร้อมให้ทำ" หรือยัง — ตัดสินจากจำนวนข้อในคลังจริง (questionCount)
+    ไม่ใช่จากโครงสร้างชุดข้อสอบ เพราะวิชาที่มีข้อในคลังแต่ยังไม่ได้ตั้งโครงสร้าง ระบบก็สุ่มให้ทำได้อยู่แล้ว
+    (ดู serveExam ใน gas/Code.gs ที่ fallback เป็นสุ่มจากคลังทั้งหมดสูงสุด 10 ข้อ) */
+function subjectIsReady(summary){
+  return !!(summary && summary.questionCount > 0);
+}
+
+/** ข้อความสรุปบนป้ายของการ์ดรายวิชา */
+function subjectStatText(summary){
+  if (!subjectIsReady(summary)) return "ยังไม่มีข้อสอบ";
+  if (summary.total) return summary.sections.length + " ส่วน • " + summary.total + " ข้อ";
+  return "สุ่มจากคลัง " + summary.questionCount + " ข้อ";
+}
+
+/** การ์ดรายวิชา 1 ใบ — ready = กดเข้าไปทำข้อสอบได้, ไม่ ready = การ์ดจาง ๆ ไม่มีปุ่ม
+    ใช้ร่วมกันที่ index.html และ subjects.html เพื่อให้หน้าตาและเกณฑ์ตรงกันเสมอ */
+function subjectCardHtml(s, summary){
+  const ready = subjectIsReady(summary);
+  return `
+    <div class="card${ready ? "" : " soon"}">
+      <span class="tag">${s.icon} ${escHtml(subjectStatText(summary))}</span>
+      <h3>${escHtml(s.name)}</h3>
+      <p>${escHtml(s.desc)}</p>
+      <div class="meta"><span>⏱ ${s.minutes} นาที</span></div>
+      ${ready
+        ? `<a class="btn p block" href="exam.html?subject=${encodeURIComponent(s.slug)}" style="margin-top:16px">📝 ทำข้อสอบ</a>`
+        : `<span class="btn p block disabled" aria-disabled="true" style="margin-top:16px">กำลังเตรียมข้อสอบ</span>`}
+    </div>`;
+}
+
+/** แยกรายวิชาเป็น 2 กลุ่มตามความพร้อม ด้วยคำขอเดียว — คืน { ready:[], pending:[], map } */
+async function splitSubjectsByReadiness(subjects){
   const map = await blueprintSummaryMap(subjects.map(s => s.slug));
-  subjects.forEach(s => {
-    const el = document.getElementById("stat_" + s.slug);
-    if (!el) return;
-    const sum = map.get(s.slug) || { sections: [], total: 0 };
-    el.textContent = sum.total ? (sum.sections.length + " ส่วน • " + sum.total + " ข้อ") : "ยังไม่ได้ตั้งโครงสร้างข้อสอบ";
-  });
+  const ready = [], pending = [];
+  subjects.forEach(s => (subjectIsReady(map.get(s.slug)) ? ready : pending).push(s));
+  return { ready, pending, map };
 }
 
 /* ══════════════════════════ ตราสัญลักษณ์ "มหาเทพพยายาม" (ถ้วยความพยายาม) ══════════════════════════
@@ -1189,7 +1216,8 @@ async function demoApi(action, payload){
     const summaries = {};
     (payload.subjects || []).forEach(slug => {
       const sections = demoBlueprintLoad(slug);
-      summaries[slug] = { sections, total: sections.reduce((s, x) => s + (x.count || 0), 0) };
+      summaries[slug] = { sections, total: sections.reduce((s, x) => s + (x.count || 0), 0),
+                          questionCount: demoBankLoad(slug).length };
     });
     return { ok:true, summaries };
   }

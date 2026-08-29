@@ -25,7 +25,16 @@
 
   <section class="section" style="padding-top:10px">
     <div class="wrap">
-      <div class="grid c3" id="subjectList"></div>
+      <div id="readyWrap">
+        <p class="muted" id="loadingNote">กำลังโหลดรายวิชา…</p>
+        <div class="grid c3" id="subjectList"></div>
+      </div>
+
+      <div id="pendingWrap" class="hidden" style="margin-top:38px">
+        <h2 style="font-size:19px;margin-bottom:4px">ยังไม่เปิดให้ทำข้อสอบ</h2>
+        <p class="muted" style="margin-bottom:16px;font-size:14.5px">วิชาเหล่านี้อยู่ระหว่างเตรียมคลังข้อสอบ เปิดให้ทำทันทีที่มีข้อสอบพร้อม</p>
+        <div class="grid c3" id="pendingList"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -36,17 +45,20 @@
   renderHeader("subjects.html");
   renderFooter();
 
-  document.getElementById("subjectList").innerHTML = visibleSubjects().map(s => `
-    <div class="card">
-      <span class="tag">${s.icon} <span id="stat_${s.slug}">กำลังโหลด…</span></span>
-      <h3>${s.name}</h3>
-      <p>${s.desc}</p>
-      <div class="meta"><span>⏱ ${s.minutes} นาที</span></div>
-      <a class="btn p block" href="exam.html?subject=${s.slug}" style="margin-top:16px">📝 ทำข้อสอบ</a>
-    </div>
-  `).join("");
+  /* แยก 2 กลุ่มตามจำนวนข้อในคลังจริง แล้วค่อยวาดการ์ด (ต้องรอผลจากเซิร์ฟเวอร์ก่อนถึงจะรู้ว่าวิชาไหนพร้อม) */
+  (async function renderSubjects(){
+    const { ready, pending, map } = await splitSubjectsByReadiness(visibleSubjects());
 
-  fillSubjectStats(visibleSubjects());
+    document.getElementById("loadingNote").classList.add("hidden");
+    document.getElementById("subjectList").innerHTML = ready.length
+      ? ready.map(s => subjectCardHtml(s, map.get(s.slug))).join("")
+      : '<p class="muted">ยังไม่มีวิชาไหนเปิดให้ทำข้อสอบตอนนี้ กลับมาดูใหม่ได้เร็ว ๆ นี้</p>';
+
+    if (pending.length){
+      document.getElementById("pendingList").innerHTML = pending.map(s => subjectCardHtml(s, map.get(s.slug))).join("");
+      document.getElementById("pendingWrap").classList.remove("hidden");
+    }
+  })();
 </script>
 </body>
 </html>

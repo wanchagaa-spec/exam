@@ -86,16 +86,14 @@
   renderFooter();
   renderSidebar();
 
-  document.getElementById("subjectPreview").innerHTML = visibleSubjects().slice(0,3).map(s => `
-    <a class="card" href="exam.html?subject=${s.slug}">
-      <span class="tag">${s.icon} <span id="stat_${s.slug}">กำลังโหลด…</span></span>
-      <h3>${s.name}</h3>
-      <p>${s.desc}</p>
-      <div class="meta"><span>⏱ ${s.minutes} นาที</span></div>
-    </a>
-  `).join("");
-
-  fillSubjectStats(visibleSubjects().slice(0,3));
+  /* หน้าแรกโชว์เฉพาะวิชาที่มีข้อสอบพร้อมแล้ว จะได้ไม่พาคนกดเข้าไปเจอวิชาว่าง */
+  (async function renderPreview(){
+    const { ready, map } = await splitSubjectsByReadiness(visibleSubjects());
+    const box = document.getElementById("subjectPreview");
+    box.innerHTML = ready.length
+      ? ready.slice(0,3).map(s => subjectCardHtml(s, map.get(s.slug))).join("")
+      : '<p class="muted">กำลังเตรียมคลังข้อสอบอยู่ · <a href="subjects.html">ดูรายวิชาทั้งหมด →</a></p>';
+  })();
 
   document.getElementById("newsPreview").innerHTML = NEWS.slice(0,3).map(n => `
     <div class="card">

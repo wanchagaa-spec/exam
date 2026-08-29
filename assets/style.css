@@ -202,6 +202,13 @@ footer.site{border-top:1px solid var(--line);margin-top:70px;padding:36px 20px 4
   background:rgba(255,111,176,.16);color:var(--accent);margin-bottom:12px}
 .card .meta{display:flex;gap:14px;margin-top:14px;font-size:13.5px;color:var(--muted2)}
 
+/* การ์ดวิชาที่ยังไม่มีข้อสอบ — จางลงและกดไม่ได้ แต่ยังอ่านรายละเอียดวิชาได้ครบ */
+.card.soon{opacity:.62}
+.card.soon:hover{background:transparent}
+.card.soon .tag{background:rgba(0,0,0,.07);color:var(--muted)}
+.btn.disabled{opacity:.55;cursor:not-allowed;pointer-events:none;
+  background:var(--card-hi);color:var(--muted);box-shadow:none}
+
 /* ── ฟอร์ม ────────────────────────────────────────────────── */
 .field{margin-bottom:18px}
 .field label{display:block;font-weight:600;margin-bottom:7px;font-size:15px}

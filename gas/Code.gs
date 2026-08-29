@@ -746,10 +746,19 @@ function getBlueprint_(subject) {
 function blueprintSummaries(body) {
   const wanted = Array.isArray(body.subjects) ? body.subjects.slice(0, 50).map(x => String(x).slice(0, 50)) : [];
   const out = {};
-  wanted.forEach(slug => { out[slug] = { sections: [], total: 0 }; });
+  wanted.forEach(slug => { out[slug] = { sections: [], total: 0, questionCount: 0 }; });
   if (!wanted.length) return { ok: true, summaries: out };
 
-  const sh = ss_().getSheetByName('Blueprint');
+  const ss = ss_();
+
+  // จำนวนข้อในคลังของแต่ละวิชา — ใช้ getLastRow() พอ ไม่ต้องอ่านเนื้อข้อสอบทั้งชีต
+  // (หน้าเว็บใช้ตัวเลขนี้แยกว่าวิชาไหน "พร้อมให้ทำ" แล้ว วิชาไหนยังไม่มีข้อสอบ — ไม่ได้ส่งตัวข้อสอบหรือเฉลยไปด้วย)
+  wanted.forEach(slug => {
+    const qsh = ss.getSheetByName('Q_' + slug);
+    if (qsh) out[slug].questionCount = Math.max(0, qsh.getLastRow() - 1); // ลบแถวหัวตาราง
+  });
+
+  const sh = ss.getSheetByName('Blueprint');
   if (!sh || sh.getLastColumn() <= 4) return { ok: true, summaries: out };
 
   const rows = sh.getDataRange().getValues();

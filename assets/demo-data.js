@@ -13,7 +13,13 @@ const SUBJECTS = [
   { slug:"biology",     name:"ชีววิทยา (A-Level)",             icon:"🧬", desc:"เซลล์ พันธุศาสตร์ และระบบร่างกายมนุษย์",      minutes:90, visible:true },
   { slug:"social",      name:"สังคมศึกษา (A-Level)",           icon:"🌏", desc:"ศาสนา หน้าที่พลเมือง เศรษฐศาสตร์ และประวัติศาสตร์", minutes:90, visible:true },
   { slug:"thai",        name:"ภาษาไทย (A-Level)",              icon:"📖", desc:"หลักภาษา การอ่าน การเขียน และวรรณคดี",         minutes:90, visible:true },
-  { slug:"english",     name:"ภาษาอังกฤษ (A-Level)",           icon:"🔤", desc:"Grammar, Vocabulary และ Reading Comprehension", minutes:90, visible:true }
+  { slug:"english",     name:"ภาษาอังกฤษ (A-Level)",           icon:"🔤", desc:"Grammar, Vocabulary และ Reading Comprehension", minutes:90, visible:true },
+
+  /* ── TGAT (ความถนัดทั่วไป) — คนละสนามสอบกับ A-Level ข้างบน แต่ใช้ระบบคลังข้อสอบ/โครงสร้างชุดเดียวกันทุกอย่าง
+     เวลาสอบจริงพาร์ตละ 60 นาที (รวม 3 พาร์ต 180 นาที) ── */
+  { slug:"tgat1",       name:"TGAT1 การสื่อสารภาษาอังกฤษ",     icon:"🗣️", desc:"English Communication — บทสนทนาและการอ่านภาษาอังกฤษ", minutes:60, visible:true },
+  { slug:"tgat2",       name:"TGAT2 การคิดอย่างมีเหตุผล",       icon:"🧠", desc:"ความสามารถทางภาษา ตัวเลข มิติสัมพันธ์ และเหตุผล",      minutes:60, visible:true },
+  { slug:"tgat3",       name:"TGAT3 สมรรถนะการทำงาน",          icon:"🤝", desc:"การสร้างคุณค่า แก้ปัญหาซับซ้อน จัดการอารมณ์ และการเป็นพลเมือง", minutes:60, visible:true }
 ];
 
 /* หมวด/สาระของแต่ละวิชา — ใช้เป็นลิสต์ให้เลือกตอนติดแท็กข้อสอบในหน้าแอดมิน
@@ -28,7 +34,14 @@ const SUBJECT_STRANDS = {
   "biology":     ["เซลล์และสารชีวโมเลกุล", "พันธุศาสตร์และวิวัฒนาการ", "ความหลากหลายทางชีวภาพ", "ระบบร่างกายมนุษย์", "นิเวศวิทยา"],
   "social":      ["ศาสนา ศีลธรรม จริยธรรม", "หน้าที่พลเมืองและกฎหมาย", "เศรษฐศาสตร์", "ประวัติศาสตร์", "ภูมิศาสตร์"],
   "thai":        ["หลักภาษาไทย", "การอ่านจับใจความ", "การเขียน", "วรรณคดีและวรรณกรรม"],
-  "english":     ["Grammar", "Vocabulary", "Reading Comprehension", "Language Use / Cloze Test"]
+  "english":     ["Grammar", "Vocabulary", "Reading Comprehension", "Language Use / Cloze Test"],
+
+  /* TGAT — ใช้ชื่อสาระตามโครงสร้างข้อสอบจริงของ ทปอ. จะปรับให้ตรงกับที่ออกข้อสอบเองก็ได้ */
+  "tgat1":       ["Question-Response", "Short Conversation", "Long Conversation",
+                  "Vocabulary", "Structure and Writing", "Reading Comprehension"],
+  "tgat2":       ["ความสามารถทางภาษา", "ความสามารถทางตัวเลข", "ความสามารถทางมิติสัมพันธ์", "ความสามารถทางเหตุผล"],
+  "tgat3":       ["การสร้างคุณค่าและนวัตกรรม", "การแก้ไขปัญหาซับซ้อน",
+                  "การบริหารจัดการอารมณ์", "การเป็นพลเมืองที่มีส่วนร่วมของสังคม"]
 };
 
 const NEWS = [
