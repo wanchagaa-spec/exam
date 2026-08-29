@@ -44,20 +44,45 @@ function visibleSubjects(){
 
 /** แถบเลือกวิชาสำหรับหน้าเนื้อหาการเรียนรู้ (learn.html/lesson.html) — จอกว้างแสดงเป็น sidebar ซ้าย
     จอแคบแสดงเป็นแถบเลื่อนแนวนอนแทน (ดู .subjectnav ใน style.css) ใช้ร่วมกัน 2 หน้าเพื่อให้แก้ที่เดียวพอ */
-function subjectNavHtml(activeSlug){
-  return visibleSubjects().map(s => `
-    <a class="subjectnav-item ${s.slug === activeSlug ? "on" : ""}" href="learn.html?subject=${s.slug}">
+function subjectNavHtml(activeSlug, subjects){
+  return (subjects || visibleSubjects()).map(s => `
+    <a class="subjectnav-item ${s.slug === activeSlug ? "on" : ""}" href="learn.html?subject=${encodeURIComponent(s.slug)}">
       <span class="ic">${s.icon}</span><span class="nm">${escHtml(s.name)}</span>
     </a>`).join("");
+}
+
+/** รายชื่อวิชาที่มีข้อสอบในคลังแล้ว — โหลดครั้งเดียวต่อการเปิดหน้า แล้วแคชไว้ให้ทุกจุดใช้ซ้ำ
+    (แถบข้างและแถบเลือกวิชาเรียกพร้อมกันได้โดยไม่ยิงคำขอซ้ำ)
+
+    ⚠ ถ้าโหลดไม่สำเร็จ หรือยังไม่มีวิชาไหนมีข้อสอบเลย จะคืนวิชาทั้งหมดแทน (fail open)
+    เพราะเมนูว่างเปล่าแย่กว่าเมนูที่มีวิชาเกินมา — เช่นตอนที่หลังบ้านยังไม่ได้อัปเดตเป็นเวอร์ชันที่ส่ง questionCount */
+let __subjectReadyPromise = null;
+function subjectReadyMap(){
+  if (!__subjectReadyPromise){
+    __subjectReadyPromise = blueprintSummaryMap(visibleSubjects().map(s => s.slug)).catch(() => new Map());
+  }
+  return __subjectReadyPromise;
+}
+async function readySubjects(){
+  const map = await subjectReadyMap();
+  const ready = visibleSubjects().filter(s => subjectIsReady(map.get(s.slug)));
+  return ready.length ? ready : visibleSubjects();
+}
+
+/** เติมแถบเลือกวิชาลงในองค์ประกอบที่ระบุ (เฉพาะวิชาที่มีข้อสอบแล้ว) */
+async function renderSubjectNav(el, activeSlug){
+  if (!el) return;
+  el.innerHTML = subjectNavHtml(activeSlug || "", await readySubjects());
 }
 
 /** เมนูวิชาปักหมุดขอบซ้ายจอ (เห็นเฉพาะจอกว้างมาก ดู .sitesidebar ใน style.css) — เรียกท้ายสคริปต์ของทุกหน้าเนื้อหาหลัก
     (index/news/learn/lesson/account/trophy/search/downloads/contact) ยกเว้น exam.html และหน้าแอดมิน/login/register */
 function renderSidebar(activeSlug){
-  const html = subjectNavHtml(activeSlug || "");
   const existing = document.getElementById("siteSidebar");
-  if (existing){ existing.innerHTML = html; return; }
-  document.body.insertAdjacentHTML("beforeend", `<aside class="sitesidebar" id="siteSidebar">${html}</aside>`);
+  if (existing){ renderSubjectNav(existing, activeSlug); return; }
+  // สร้างกล่องเปล่าไว้ก่อนแล้วค่อยเติมรายชื่อวิชาเมื่อรู้ว่าวิชาไหนมีข้อสอบแล้ว (ต้องถามเซิร์ฟเวอร์ก่อน)
+  document.body.insertAdjacentHTML("beforeend", `<aside class="sitesidebar" id="siteSidebar"></aside>`);
+  renderSubjectNav(document.getElementById("siteSidebar"), activeSlug);
   // ตำแหน่งบน (top) วัดจากความสูงจริงของ header แทนค่าคงที่ เพราะโหมดตัวอย่างมีแบนเนอร์แถบบนเพิ่มเข้ามาให้ header สูงกว่าปกติ
   const positionSidebar = () => {
     const el = document.getElementById("siteSidebar");

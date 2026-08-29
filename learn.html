@@ -67,7 +67,7 @@
   const slug = params.get("subject") || (visibleSubjects()[0] && visibleSubjects()[0].slug) || "";
   const subject = SUBJECTS.find(s => s.slug === slug);
 
-  document.getElementById("subjectNav").innerHTML = subjectNavHtml(slug);
+  renderSubjectNav(document.getElementById("subjectNav"), slug);
   renderSidebar(slug);
 
   if (!subject){

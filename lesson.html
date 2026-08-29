@@ -91,7 +91,7 @@
   const subjectSlug = params.get("subject") || "";
 
   document.getElementById("backLink").href = "learn.html" + (subjectSlug ? "?subject=" + encodeURIComponent(subjectSlug) : "");
-  document.getElementById("subjectNav").innerHTML = subjectNavHtml(subjectSlug);
+  renderSubjectNav(document.getElementById("subjectNav"), subjectSlug);
   renderSidebar(subjectSlug);
 
   let quizQuestions = [];
@@ -110,7 +110,7 @@
     const subjectMeta = SUBJECTS.find(s => s.slug === res.lesson.subject);
     document.title = res.lesson.title + " — ข้อสอบ";
     document.getElementById("backLink").href = "learn.html?subject=" + encodeURIComponent(res.lesson.subject);
-    document.getElementById("subjectNav").innerHTML = subjectNavHtml(res.lesson.subject);
+    renderSubjectNav(document.getElementById("subjectNav"), res.lesson.subject);
     renderSidebar(res.lesson.subject);
 
     box.innerHTML = `
