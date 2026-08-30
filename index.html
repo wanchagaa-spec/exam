@@ -91,7 +91,7 @@
     const { ready, map } = await splitSubjectsByReadiness(visibleSubjects());
     const box = document.getElementById("subjectPreview");
     box.innerHTML = ready.length
-      ? ready.slice(0,3).map(s => subjectCardHtml(s, map.get(s.slug))).join("")
+      ? ready.slice(0,3).map(s => subjectCardHtml(s, map.get(s.slug), true)).join("")
       : '<p class="muted">กำลังเตรียมคลังข้อสอบอยู่ · <a href="subjects.html">ดูรายวิชาทั้งหมด →</a></p>';
   })();
 

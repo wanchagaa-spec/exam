@@ -51,22 +51,12 @@ function subjectNavHtml(activeSlug, subjects){
     </a>`).join("");
 }
 
-/** รายชื่อวิชาที่มีข้อสอบในคลังแล้ว — โหลดครั้งเดียวต่อการเปิดหน้า แล้วแคชไว้ให้ทุกจุดใช้ซ้ำ
-    (แถบข้างและแถบเลือกวิชาเรียกพร้อมกันได้โดยไม่ยิงคำขอซ้ำ)
-
-    ⚠ ถ้าโหลดไม่สำเร็จ หรือยังไม่มีวิชาไหนมีข้อสอบเลย จะคืนวิชาทั้งหมดแทน (fail open)
-    เพราะเมนูว่างเปล่าแย่กว่าเมนูที่มีวิชาเกินมา — เช่นตอนที่หลังบ้านยังไม่ได้อัปเดตเป็นเวอร์ชันที่ส่ง questionCount */
-let __subjectReadyPromise = null;
-function subjectReadyMap(){
-  if (!__subjectReadyPromise){
-    __subjectReadyPromise = blueprintSummaryMap(visibleSubjects().map(s => s.slug)).catch(() => new Map());
-  }
-  return __subjectReadyPromise;
-}
+/** รายชื่อวิชาที่มีข้อสอบในคลังแล้ว (ใช้กับแถบเมนูเลือกวิชา)
+    ⚠ ถ้าถามไม่สำเร็จ หรือยังไม่มีวิชาไหนมีข้อสอบเลย จะคืนวิชาทั้งหมดแทน
+    เพราะเมนูว่างเปล่าแย่กว่าเมนูที่มีวิชาเกินมา */
 async function readySubjects(){
-  const map = await subjectReadyMap();
-  const ready = visibleSubjects().filter(s => subjectIsReady(map.get(s.slug)));
-  return ready.length ? ready : visibleSubjects();
+  const { ready, pending } = await splitSubjectsByReadiness(visibleSubjects());
+  return ready.length ? ready : ready.concat(pending);
 }
 
 /** เติมแถบเลือกวิชาลงในองค์ประกอบที่ระบุ (เฉพาะวิชาที่มีข้อสอบแล้ว) */
@@ -736,19 +726,33 @@ async function blueprintSummary(subject){
   return { sections, total: sections.reduce((s,x) => s + (x.count||0), 0) };
 }
 
-/** สรุปโครงสร้างของหลายวิชาพร้อมกันด้วยคำขอเดียว — ใช้ที่หน้าแรกและหน้ารายวิชาที่ต้องแสดงหลายการ์ดพร้อมกัน
+/** สรุปโครงสร้าง + จำนวนข้อในคลังของหลายวิชาพร้อมกันด้วยคำขอเดียว
     (เดิมยิงทีละวิชา หน้ารายวิชา 9 วิชา = 9 คำขอ ทุกครั้งที่เปิดหน้า)
-    คืน Map<slug, {sections, total}> — วิชาที่ยังไม่ได้ตั้งโครงสร้างจะได้ total = 0 */
+
+    คืน { map: Map<slug, {sections,total,questionCount}>, ok }
+    ⚠ ผู้เรียกต้องแยกให้ออกระหว่าง ok:false ("ถามเซิร์ฟเวอร์ไม่สำเร็จ จึงไม่รู้") กับ
+      ok:true ที่ questionCount = 0 ("ถามแล้ว รู้แน่ว่าวิชานี้ยังไม่มีข้อสอบ")
+      ถ้าปนกันเมื่อไหร่ เน็ตล่มครั้งเดียวจะกลายเป็นปิดทั้งเว็บไม่ให้ใครทำข้อสอบได้
+
+    แคชผลไว้ต่อการเปิดหน้า แยกตามชุดวิชาที่ขอ — หลายจุดในหน้าเดียวกันขอชุดเดียวกันจึงยิงคำขอเดียว */
+const __summaryCache = new Map();
 async function blueprintSummaryMap(slugs){
+  const key = slugs.join(",");
+  if (!__summaryCache.has(key)) __summaryCache.set(key, loadBlueprintSummaries_(slugs));
+  return __summaryCache.get(key);
+}
+async function loadBlueprintSummaries_(slugs){
   const map = new Map();
-  if (!slugs.length) return map;
-  const res = await apiCall("blueprintSummaries", { subjects: slugs });
-  const summaries = (res.ok && res.summaries) || {};
+  if (!slugs.length) return { map, ok: true };
+  let res;
+  try { res = await apiCall("blueprintSummaries", { subjects: slugs }); }
+  catch (e) { res = { ok: false }; }
+  const summaries = (res && res.ok && res.summaries) || {};
   slugs.forEach(slug => {
     const entry = summaries[slug] || { sections: [], total: 0, questionCount: 0 };
     map.set(slug, { sections: entry.sections || [], total: entry.total || 0, questionCount: entry.questionCount || 0 });
   });
-  return map;
+  return { map, ok: !!(res && res.ok) };
 }
 
 /** วิชานี้ "พร้อมให้ทำ" หรือยัง — ตัดสินจากจำนวนข้อในคลังจริง (questionCount)
@@ -758,20 +762,23 @@ function subjectIsReady(summary){
   return !!(summary && summary.questionCount > 0);
 }
 
-/** ข้อความสรุปบนป้ายของการ์ดรายวิชา */
-function subjectStatText(summary){
-  if (!subjectIsReady(summary)) return "ยังไม่มีข้อสอบ";
-  if (summary.total) return summary.sections.length + " ส่วน • " + summary.total + " ข้อ";
-  return "สุ่มจากคลัง " + summary.questionCount + " ข้อ";
+/** ข้อความสรุปบนป้ายของการ์ดรายวิชา — isReady ส่งมาจากผู้เรียก ไม่คำนวณเองซ้ำ */
+function subjectStatText(summary, isReady){
+  if (!isReady) return "ยังไม่มีข้อสอบ";
+  if (summary && summary.total) return summary.sections.length + " ส่วน • " + summary.total + " ข้อ";
+  if (summary && summary.questionCount) return "สุ่มจากคลัง " + summary.questionCount + " ข้อ";
+  return "พร้อมให้ทำ"; // ถามจำนวนข้อไม่สำเร็จ แต่ยังให้เข้าไปทำได้ (ดู splitSubjectsByReadiness)
 }
 
 /** การ์ดรายวิชา 1 ใบ — ready = กดเข้าไปทำข้อสอบได้, ไม่ ready = การ์ดจาง ๆ ไม่มีปุ่ม
-    ใช้ร่วมกันที่ index.html และ subjects.html เพื่อให้หน้าตาและเกณฑ์ตรงกันเสมอ */
-function subjectCardHtml(s, summary){
-  const ready = subjectIsReady(summary);
+    ใช้ร่วมกันที่ index.html และ subjects.html เพื่อให้หน้าตาและเกณฑ์ตรงกันเสมอ
+
+    ⚠ ต้องรับ ready มาจากผู้เรียก (ผลของ splitSubjectsByReadiness) ไม่ใช่คำนวณเองจาก summary
+    ไม่งั้นตอน fail open ที่ยังไม่รู้จำนวนข้อ การ์ดจะวาดเป็น "ยังไม่มีข้อสอบ" สวนทางกับที่หน้าจัดกลุ่มไว้ */
+function subjectCardHtml(s, summary, ready){
   return `
     <div class="card${ready ? "" : " soon"}">
-      <span class="tag">${s.icon} ${escHtml(subjectStatText(summary))}</span>
+      <span class="tag">${s.icon} ${escHtml(subjectStatText(summary, ready))}</span>
       <h3>${escHtml(s.name)}</h3>
       <p>${escHtml(s.desc)}</p>
       <div class="meta"><span>⏱ ${s.minutes} นาที</span></div>
@@ -783,7 +790,10 @@ function subjectCardHtml(s, summary){
 
 /** แยกรายวิชาเป็น 2 กลุ่มตามความพร้อม ด้วยคำขอเดียว — คืน { ready:[], pending:[], map } */
 async function splitSubjectsByReadiness(subjects){
-  const map = await blueprintSummaryMap(subjects.map(s => s.slug));
+  const { map, ok } = await blueprintSummaryMap(subjects.map(s => s.slug));
+  // ถามเซิร์ฟเวอร์ไม่สำเร็จ (เน็ตล่ม หรือหลังบ้านยังเป็นเวอร์ชันที่ไม่ส่ง questionCount)
+  // → ถือว่าทุกวิชาเข้าทำข้อสอบได้ตามเดิม ดีกว่าล็อกไม่ให้ใครทำข้อสอบเลยเพราะคำขอเดียวล้มเหลว
+  if (!ok) return { ready: subjects.slice(), pending: [], map };
   const ready = [], pending = [];
   subjects.forEach(s => (subjectIsReady(map.get(s.slug)) ? ready : pending).push(s));
   return { ready, pending, map };

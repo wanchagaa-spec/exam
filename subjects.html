@@ -51,11 +51,11 @@
 
     document.getElementById("loadingNote").classList.add("hidden");
     document.getElementById("subjectList").innerHTML = ready.length
-      ? ready.map(s => subjectCardHtml(s, map.get(s.slug))).join("")
+      ? ready.map(s => subjectCardHtml(s, map.get(s.slug), true)).join("")
       : '<p class="muted">ยังไม่มีวิชาไหนเปิดให้ทำข้อสอบตอนนี้ กลับมาดูใหม่ได้เร็ว ๆ นี้</p>';
 
     if (pending.length){
-      document.getElementById("pendingList").innerHTML = pending.map(s => subjectCardHtml(s, map.get(s.slug))).join("");
+      document.getElementById("pendingList").innerHTML = pending.map(s => subjectCardHtml(s, map.get(s.slug), false)).join("");
       document.getElementById("pendingWrap").classList.remove("hidden");
     }
   })();
