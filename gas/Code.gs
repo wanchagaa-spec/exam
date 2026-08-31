@@ -315,6 +315,44 @@ function logout(body) {
   return { ok: true };
 }
 
+/* ══════════════════════════ กันการเดารหัสผ่าน ══════════════════════════
+   นับครั้งที่ใส่รหัสผิดไว้ใน CacheService (ไม่แตะชีตเลย จึงเร็วและไม่กินโควตา)
+   ครบเพดานแล้วตีกลับทันทีโดยไม่ต้องอ่านชีต Users ด้วยซ้ำ และล้างตัวนับทิ้งเมื่อล็อกอินสำเร็จ
+
+   ⚠ ผลข้างเคียงที่ยอมรับ: คนที่รู้อีเมลของคนอื่นจงใจใส่ผิดจนบัญชีนั้นถูกล็อกชั่วคราวได้
+      เลือกวิธีนี้เพราะทางเลือกอีกทาง (หน่วงเวลาด้วย Utilities.sleep) จะกินเวลาล็อกของ Apps Script
+      ทำให้คำขอของคนอื่นทั้งระบบช้าตามไปด้วย ซึ่งแย่กว่า
+
+   ปลดล็อกเองได้ทันที: เปิดหน้า Apps Script → เลือกฟังก์ชัน unlockLogin แล้วกด Run
+   (แก้อีเมลในฟังก์ชันก่อน หรือเว้นว่างไว้เพื่อปลดล็อกฝั่งผู้ดูแล) */
+const LOGIN_MAX_FAILS    = 5;
+const LOGIN_LOCK_SECONDS = 900;   // 15 นาที
+const ADMIN_MAX_FAILS    = 10;
+const ADMIN_LOCK_SECONDS = 600;   // 10 นาที
+const ADMIN_ATTEMPT_ID   = '__admin__';
+
+function loginFailKey_(id) { return 'loginfail_' + String(id || '').toLowerCase(); }
+
+/** จำนวนครั้งที่ยังใส่ผิดได้ก่อนถูกล็อก — 0 = ถูกล็อกอยู่ */
+function loginTriesLeft_(id, max) {
+  const n = Number(CacheService.getScriptCache().get(loginFailKey_(id))) || 0;
+  return Math.max(0, max - n);
+}
+function loginFailCount_(id, lockSeconds) {
+  const cache = CacheService.getScriptCache();
+  const key = loginFailKey_(id);
+  const n = (Number(cache.get(key)) || 0) + 1;
+  cache.put(key, String(n), lockSeconds);
+  return n;
+}
+function loginFailClear_(id) { CacheService.getScriptCache().remove(loginFailKey_(id)); }
+
+/** ปลดล็อกด้วยมือจากหน้า Apps Script — แก้อีเมลตรงนี้แล้วกด Run (เว้นว่าง = ปลดล็อกฝั่งผู้ดูแล) */
+function unlockLogin() {
+  const email = '';  // ★ ใส่อีเมลที่ต้องการปลดล็อก
+  loginFailClear_(email || ADMIN_ATTEMPT_ID);
+}
+
 /* ══════════════════════════ สมาชิก (ล็อกอินด้วยอีเมล) ══════════════════════════ */
 /** ⚠ PASSWORD_PEPPER คือค่าที่ผสมตอนแฮชรหัสผ่าน เปลี่ยนเมื่อไหร่ = สมาชิกทุกคนล็อกอินไม่ได้ทันที
     ค่าเริ่มต้นคือ DEFAULT_TOKEN เพื่อให้รหัสผ่านที่แฮชไว้ก่อนหน้านี้ยังใช้ได้เหมือนเดิม ถึงแม้จะเปลี่ยน TOKEN ใหม่ก็ตาม
@@ -353,18 +391,34 @@ function register(body) {
 function login(body) {
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
+
+  if (!loginTriesLeft_(email, LOGIN_MAX_FAILS)) {
+    return { ok: false, error: 'ใส่รหัสผ่านผิดหลายครั้งเกินไป กรุณารอประมาณ 15 นาทีแล้วลองใหม่' };
+  }
+
+  /* นับผิดทั้งกรณีไม่พบอีเมลและกรณีรหัสไม่ตรง และตอบข้อความเดียวกันทั้งคู่
+     ไม่งั้นข้อความที่ต่างกันจะกลายเป็นเครื่องมือให้คนไล่เดาว่าอีเมลไหนสมัครไว้แล้วบ้าง */
+  const fail = () => {
+    const used = loginFailCount_(email, LOGIN_LOCK_SECONDS);
+    const left = Math.max(0, LOGIN_MAX_FAILS - used);
+    // บอกจำนวนครั้งที่เหลือเฉพาะตอนใกล้ถูกล็อก เพื่อให้คนที่พิมพ์ผิดจริงรู้ตัวก่อน
+    return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' +
+             (left > 0 && left <= 2 ? ' (เหลืออีก ' + left + ' ครั้งก่อนถูกล็อกชั่วคราว)' : '') };
+  };
+
   const sh = usersSheet_();
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).toLowerCase() === email) {
       if (rows[i][5] === hashPass_(email, password)) {
+        loginFailClear_(email);
         return { ok: true, email, name: rows[i][2], age: rows[i][3], school: rows[i][4], avatar: rows[i][6] || '',
                  sessionToken: createSession_(email) };
       }
-      return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
+      return fail();
     }
   }
-  return { ok: false, error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' };
+  return fail();
 }
 
 /* รับเฉพาะ data URL ของรูปเท่านั้น — ค่าที่หลุดเข้ามาแบบอื่นจะถูกเอาไปใส่ใน src="..." ของ <img> ฝั่งหน้าเว็บ
@@ -1448,11 +1502,23 @@ function requireAdmin_(body) {
   return !!(body && body.adminPassword && body.adminPassword === expected);
 }
 
+/* จำกัดการเดารหัสผู้ดูแลด้วย — เป็นเป้าที่มีค่ากว่ารหัสของนักเรียนมาก เพราะเดาถูกครั้งเดียวได้เฉลยทั้งคลัง
+   นับรวมเป็นตัวเดียวทั้งระบบ (มีรหัสผู้ดูแลชุดเดียว) เพดานจึงสูงกว่าและล็อกสั้นกว่าฝั่งนักเรียน
+   ⚠ แปลว่าคนอื่นจงใจใส่ผิดจนล็อกหน้าแอดมินได้ — ปลดเองได้ทันทีด้วยฟังก์ชัน unlockLogin ในหน้า Apps Script
+   นับเฉพาะตอนล็อกอินเท่านั้น ไม่ได้นับตอนกดปุ่มต่าง ๆ ในหน้าแอดมิน (requireAdmin_ ไม่ยุ่งกับตัวนับ) */
 function adminLogin(body) {
   if (!adminPassword_()) {
     return { ok: false, error: 'ระบบยังไม่ได้ตั้งรหัสผ่านผู้ดูแล — ตั้ง Script Property ชื่อ ADMIN_PASSWORD ใน Apps Script ก่อน' };
   }
-  return requireAdmin_(body) ? { ok: true } : { ok: false, error: 'รหัสผ่านผู้ดูแลไม่ถูกต้อง' };
+  if (!loginTriesLeft_(ADMIN_ATTEMPT_ID, ADMIN_MAX_FAILS)) {
+    return { ok: false, error: 'ใส่รหัสผ่านผิดหลายครั้งเกินไป กรุณารอประมาณ 10 นาทีแล้วลองใหม่' };
+  }
+  if (requireAdmin_(body)) {
+    loginFailClear_(ADMIN_ATTEMPT_ID);
+    return { ok: true };
+  }
+  loginFailCount_(ADMIN_ATTEMPT_ID, ADMIN_LOCK_SECONDS);
+  return { ok: false, error: 'รหัสผ่านผู้ดูแลไม่ถูกต้อง' };
 }
 
 function adminListQuestions(body) {

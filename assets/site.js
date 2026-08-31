@@ -1162,6 +1162,23 @@ async function apiCall(action, payload){
 }
 
 /* ── หลังบ้านจำลองสำหรับโหมดตัวอย่างเท่านั้น ─────────────────── */
+/* ตัวนับครั้งที่ใส่รหัสผิดของโหมดตัวอย่าง — สะท้อน LOGIN_MAX_FAILS/LOGIN_LOCK_SECONDS ใน gas/Code.gs */
+const DEMO_LOGIN_MAX_FAILS = 5;
+const DEMO_LOGIN_LOCK_MS = 900000;
+const __demoLoginFails = new Map();
+function demoLoginTriesLeft(email){
+  const rec = __demoLoginFails.get(email);
+  if (!rec || Date.now() > rec.until){ __demoLoginFails.delete(email); return DEMO_LOGIN_MAX_FAILS; }
+  return Math.max(0, DEMO_LOGIN_MAX_FAILS - rec.count);
+}
+function demoLoginFail(email){
+  const rec = __demoLoginFails.get(email);
+  const count = (rec && Date.now() <= rec.until ? rec.count : 0) + 1;
+  __demoLoginFails.set(email, { count, until: Date.now() + DEMO_LOGIN_LOCK_MS });
+  return Math.max(0, DEMO_LOGIN_MAX_FAILS - count);
+}
+function demoLoginClear(email){ __demoLoginFails.delete(email); }
+
 async function demoApi(action, payload){
   await new Promise(r => setTimeout(r, 350));
   const users = demoUsers();
@@ -1177,9 +1194,17 @@ async function demoApi(action, payload){
 
   if (action === "login"){
     const email = String(payload.email || "").trim().toLowerCase();
+    // กฎเดียวกับ login() ใน gas/Code.gs — ผิดครบเพดานแล้วล็อกชั่วคราว สำเร็จแล้วล้างตัวนับ
+    // (โหมดตัวอย่างเก็บตัวนับไว้ในหน่วยความจำของแท็บ ปิดแท็บแล้วหายไป)
+    if (!demoLoginTriesLeft(email))
+      return { ok:false, error:"ใส่รหัสผ่านผิดหลายครั้งเกินไป กรุณารอประมาณ 15 นาทีแล้วลองใหม่" };
     const u = users.find(x => x.email === email);
-    if (!u || u.passHash !== await sha256(payload.password))
-      return { ok:false, error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง" };
+    if (!u || u.passHash !== await sha256(payload.password)){
+      const left = demoLoginFail(email);
+      return { ok:false, error:"อีเมลหรือรหัสผ่านไม่ถูกต้อง" +
+               (left > 0 && left <= 2 ? " (เหลืออีก " + left + " ครั้งก่อนถูกล็อกชั่วคราว)" : "") };
+    }
+    demoLoginClear(email);
     return { ok:true, email: u.email, name: u.name, age: u.age, school: u.school, avatar: u.avatar || "", sessionToken: "demo-session" };
   }
 
