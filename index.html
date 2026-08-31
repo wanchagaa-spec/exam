@@ -95,11 +95,12 @@
       : '<p class="muted">กำลังเตรียมคลังข้อสอบอยู่ · <a href="subjects.html">ดูรายวิชาทั้งหมด →</a></p>';
   })();
 
+  // escape ทุกช่องแม้ข้อมูลจะมาจาก demo-data.js ที่มีแต่เราแก้ — วันไหนย้ายข่าวไปเก็บในชีตให้แอดมินแก้ได้ จุดนี้จะกลายเป็นช่องโหว่ทันที
   document.getElementById("newsPreview").innerHTML = NEWS.slice(0,3).map(n => `
     <div class="card">
-      <span class="tag">${n.date}</span>
-      <h3 style="font-size:17px">${n.title}</h3>
-      <p>${n.body}</p>
+      <span class="tag">${escHtml(n.date)}</span>
+      <h3 style="font-size:17px">${escHtml(n.title)}</h3>
+      <p>${escHtml(n.body)}</p>
     </div>
   `).join("");
 </script>

@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ทำข้อสอบ — ข้อสอบ</title>
+<meta name="description" content="ทำข้อสอบจับเวลา สุ่มข้อสอบชุดใหม่ทุกครั้ง พร้อมเฉลยรายข้อทันทีที่ส่งคำตอบ">
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -312,19 +314,30 @@
           "&token=" + encodeURIComponent(APP.token);
         const r = await fetch(url);
         const res = await r.json();
-        if (!res.ok) throw new Error(res.error || "โหลดข้อสอบไม่สำเร็จ");
+        // เซิร์ฟเวอร์บอกสาเหตุมาชัดเจนอยู่แล้ว เช่น "ยังไม่มีคลังข้อสอบวิชานี้" — เอามาแสดงตรง ๆ
+        // ของเดิมทิ้งข้อความนี้แล้วขึ้นว่า "ลองใหม่อีกครั้ง" ซึ่งชวนให้กดซ้ำทั้งที่กดกี่ครั้งก็ไม่ขึ้น
+        if (!res.ok){ showStartError(res.error || "โหลดข้อสอบไม่สำเร็จ", false); return; }
         questions = res.questions;
         sessionId = res.sessionId;
       } catch(err){
-        document.getElementById("n1").className = "bad";
-        document.getElementById("n1").textContent = "โหลดข้อสอบไม่สำเร็จ ลองใหม่อีกครั้ง";
-        btn.disabled = false; btn.textContent = "เริ่มทำแบบทดสอบ";
+        // มาถึงตรงนี้แปลว่าติดต่อเซิร์ฟเวอร์ไม่ได้จริง ๆ (เน็ตหลุด/endpoint ผิด) กรณีนี้กดใหม่มีโอกาสสำเร็จ
+        showStartError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสัญญาณอินเทอร์เน็ตแล้วลองใหม่", true);
         return;
       }
     }
 
     buildExamScreen();
     startClock();
+  }
+
+  /** แสดงสาเหตุที่เริ่มทำข้อสอบไม่ได้ — retryable = กดใหม่แล้วมีโอกาสสำเร็จหรือเปล่า */
+  function showStartError(message, retryable){
+    const n1 = document.getElementById("n1");
+    n1.className = "msg bad";
+    n1.textContent = message;
+    const btn = document.getElementById("start");
+    btn.disabled = false;
+    btn.textContent = retryable ? "ลองใหม่อีกครั้ง" : "เริ่มทำแบบทดสอบ";
   }
 
   function genDemoQuestions(sub){

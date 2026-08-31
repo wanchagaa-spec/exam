@@ -37,12 +37,13 @@
   renderFooter();
   renderSidebar();
 
+  // ลิงก์เอกสารมาจากไฟล์ข้อมูล จึงกรองด้วย safeHref() ก่อน กัน javascript: หลุดเข้ามาใน href
   document.getElementById("downloadList").innerHTML = DOWNLOADS.map(d => `
-    <a class="card" href="${d.href}" style="display:flex;align-items:center;gap:16px">
+    <a class="card" href="${escHtml(safeHref(d.href))}" style="display:flex;align-items:center;gap:16px">
       <span style="font-size:30px">📄</span>
       <span>
-        <span class="tag" style="margin-bottom:6px">${d.type}</span>
-        <h3 style="font-size:17px">${d.title}</h3>
+        <span class="tag" style="margin-bottom:6px">${escHtml(d.type)}</span>
+        <h3 style="font-size:17px">${escHtml(d.title)}</h3>
       </span>
     </a>
   `).join("");

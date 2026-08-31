@@ -32,6 +32,19 @@ const NAV = [
   { href:"contact.html",   label:"ติดต่อเรา" }
 ];
 
+/** กรอง URL ที่มาจากไฟล์ข้อมูล/ชีต ก่อนเอาไปใส่ href — กัน javascript: และ data: ที่ฝังสคริปต์ได้
+    ลิงก์ที่เขียนตายไว้ในหน้าเว็บเองไม่ต้องผ่านตัวนี้
+
+    ตรวจที่ "scheme" ไม่ใช่ไล่อนุญาตทีละรูปแบบ — ไม่มี scheme แปลว่าเป็นพาธในเว็บเราเอง
+    (เช่น assets/doc.pdf หรือ /exam/x.pdf) ซึ่งปลอดภัยอยู่แล้ว ส่วนที่มี scheme อนุญาตเฉพาะ http/https/mailto/tel
+    ตัดอักขระควบคุมทิ้งก่อน เพราะเบราว์เซอร์มองข้ามมันเวลาอ่าน href (java\nscript: ยังทำงานได้) */
+function safeHref(url){
+  const u = String(url == null ? "" : url).replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  const scheme = u.match(/^([a-z][a-z0-9+.\-]*):/i);
+  if (!scheme) return u;
+  return /^(https?|mailto|tel)$/i.test(scheme[1]) ? u : "#";
+}
+
 function escHtml(s){
   return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }

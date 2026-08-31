@@ -49,20 +49,23 @@
   document.getElementById("qHeading").textContent = q ? `ผลการค้นหา: "${q}"` : "ผลการค้นหา";
   const qLower = q.trim().toLowerCase();
 
-  /* ── รายวิชา ── */
-  const subjectMatches = qLower
-    ? visibleSubjects().filter(s => s.name.toLowerCase().includes(qLower) || (s.desc || "").toLowerCase().includes(qLower))
-    : [];
-  const subjectBox = document.getElementById("subjectResults");
-  subjectBox.innerHTML = subjectMatches.length
-    ? subjectMatches.map(s => `
-      <a class="card" href="exam.html?subject=${s.slug}">
-        <span class="tag">${s.icon} ${escHtml(s.name)}</span>
-        <h3>${escHtml(s.name)}</h3>
-        <p>${escHtml(s.desc)}</p>
-      </a>
-    `).join("")
-    : '<p class="muted">ไม่พบวิชาที่ตรงกับคำค้นหา</p>';
+  /* ── รายวิชา ──
+     ใช้ splitSubjectsByReadiness() + subjectCardHtml() ตัวเดียวกับหน้ารายวิชาและหน้าแรก
+     ผลค้นหาจึงกรองด้วยกฎเดียวกัน วิชาที่ยังไม่มีข้อสอบจะแสดงเป็นการ์ดจางกดไม่ได้ แทนที่จะพาไปเจอทางตัน
+     ขอความพร้อมของ "ทุกวิชา" ไม่ใช่เฉพาะที่ตรงคำค้น เพื่อให้ใช้ผลแคชร่วมกับแถบข้างได้ ไม่ยิงคำขอซ้ำ */
+  (async function renderSubjectResults(){
+    const subjectBox = document.getElementById("subjectResults");
+    const matches = qLower
+      ? visibleSubjects().filter(s => s.name.toLowerCase().includes(qLower) || (s.desc || "").toLowerCase().includes(qLower))
+      : [];
+    if (!matches.length){
+      subjectBox.innerHTML = '<p class="muted">ไม่พบวิชาที่ตรงกับคำค้นหา</p>';
+      return;
+    }
+    const { ready, map } = await splitSubjectsByReadiness(visibleSubjects());
+    const readySlugs = new Set(ready.map(s => s.slug));
+    subjectBox.innerHTML = matches.map(s => subjectCardHtml(s, map.get(s.slug), readySlugs.has(s.slug))).join("");
+  })();
 
   /* ── โพสต์ในบอร์ดความคิดเห็น ── */
   const user = getSession();
