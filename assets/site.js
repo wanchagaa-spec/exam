@@ -1326,12 +1326,22 @@ async function demoApi(action, payload){
     const quizItems = demoLessonQuizAllLoad().filter(q => q.lessonId === payload.lessonId);
     if (!quizItems.length) return { ok:false, error:"บทนี้ยังไม่มีแบบทดสอบท้ายบท" };
     const ansIn = payload.answers || {};
+    // กฎเดียวกับ submitLessonQuiz ใน gas/Code.gs — ต้องตอบครบก่อนถึงจะได้เฉลย และให้เฉลยเฉพาะข้อที่ตอบมา
+    const answered = qid => {
+      const v = ansIn[qid];
+      return v !== undefined && v !== null && String(v).trim() !== "";
+    };
+    const missing = quizItems.filter(q => !answered(q.id)).length;
+    if (missing) return { ok:false, error:"กรุณาตอบให้ครบทุกข้อก่อนตรวจ (ยังไม่ได้ตอบ " + missing + " ข้อ)" };
+
     let allCorrect = true;
     const detail = {};
     quizItems.forEach(q => {
       const correct = answerMatches(q.type, ansIn[q.id], q.answer);
       if (!correct) allCorrect = false;
-      detail[q.id] = { correct, answer: q.answer, note: q.note || "" };
+      detail[q.id] = answered(q.id)
+        ? { correct, answer: q.answer, note: q.note || "" }
+        : { correct: false };
     });
     if (allCorrect){
       const list = demoLessonProgressLoad();

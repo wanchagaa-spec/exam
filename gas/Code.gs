@@ -1232,13 +1232,29 @@ function submitLessonQuiz(body) {
   if (!quizRows.length) return { ok: false, error: 'บทนี้ยังไม่มีแบบทดสอบท้ายบท' };
 
   const ansIn = body.answers || {};
+  const answered = qid => {
+    const v = ansIn[qid];
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  };
+
+  /* เซิร์ฟเวอร์บังคับกฎเดียวกับที่ปุ่ม "ตรวจคำตอบ" ฝั่งเว็บบังคับอยู่แล้ว คือต้องตอบครบทุกข้อก่อน
+     ถ้าไม่บังคับตรงนี้ ยิง answers เปล่ามาครั้งเดียวก็ได้เฉลยครบทั้งบทกลับไป
+     แล้วย้อนกลับมาตอบให้ถูกเพื่อรับสถานะ "อ่านแล้ว" โดยไม่ต้องอ่านเนื้อหาเลย */
+  const missing = quizRows.filter(r => !answered(String(r[0]))).length;
+  if (missing) {
+    return { ok: false, error: 'กรุณาตอบให้ครบทุกข้อก่อนตรวจ (ยังไม่ได้ตอบ ' + missing + ' ข้อ)' };
+  }
+
   let allCorrect = true;
   const detail = {};
   quizRows.forEach(r => {
     const qid = String(r[0]);
     const correct = isCorrect_(String(r[2]), ansIn[qid], String(r[5] || ''));
     if (!correct) allCorrect = false;
-    detail[qid] = { correct, answer: String(r[5] || ''), note: String(r[6] || '') };
+    // ส่งเฉลยกลับเฉพาะข้อที่ตอบมาจริง — ซ้อนอีกชั้นเผื่อกฎ "ต้องตอบครบ" ด้านบนถูกผ่อนในอนาคต
+    detail[qid] = answered(qid)
+      ? { correct, answer: String(r[5] || ''), note: String(r[6] || '') }
+      : { correct: false };
   });
 
   if (allCorrect) {
